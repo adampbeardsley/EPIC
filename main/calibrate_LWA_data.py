@@ -21,6 +21,7 @@ import healpy as HP
 import aipy
 from astropy.coordinates import Galactic, FK5
 from astropy import units
+import ephem
 import astropy.time as AT
 import ipdb as PDB
 import pickle
