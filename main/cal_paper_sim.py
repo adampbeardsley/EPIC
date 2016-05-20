@@ -128,7 +128,7 @@ ant_pos = ant_info[:,1:] # I'll let the cal class put it in wavelengths.
 #auto_noise_model = rxr_noise
 
 for pol in ['P1','P2']:
-    calarr[pol] = EPICal.cal(freqs,ant_pos,pol=pol,sim_mode=True,n_iter=cal_iter,damping_factor=0.35,inv_gains=False,sky_model=sky_model,exclude_autos=False)
+    calarr[pol] = EPICal.cal(freqs,ant_pos,pol=pol,sim_mode=True,n_iter=cal_iter,damping_factor=0.35,inv_gains=False,sky_model=sky_model,exclude_autos=True)
 
 # Create array of gains to watch them change
 ncal=itr/cal_iter
