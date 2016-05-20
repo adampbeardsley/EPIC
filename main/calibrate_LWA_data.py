@@ -160,6 +160,9 @@ if use_GSM:
     xyz = xyz[:,include].squeeze()
     n_src = sky.shape[0]
 
+    # convert units
+    sky *= 2*FCNST.Boltzmann / (FCNST.speed_of_light / f0)**2 * 10**26 # Jy/str
+
     # Get beam and gridl,gridm matrices
     print 'Retrieving saved beam'
     with open('/data2/beards/instr_data/lwa_power_beam.pickle') as f:
@@ -202,8 +205,9 @@ else:
 
     #n_src = 2 # Just Cyg A and Cas A for now
     #skypos=NP.array([[0.007725,0.116067],[0.40582995,0.528184]])
-    src_flux = NP.array([16611.68,17693.9])
-    
+    #src_flux = NP.array([16611.68,17693.9])
+    src_flux = NP.array([20539.0, 19328.0]) # Values retrieved from http://www.cv.nrao.edu/vlss/VLSSlist.shtml.save (sum nearby components)
+
     src_flux[1] = src_flux[1] * 0.57 # Manually adjusting by a rough factor of the beam because the cal module doesn't do it (yet)
     #nvect = NP.sqrt(1.0-NP.sum(skypos**2, axis=1)).reshape(-1,1) 
     #skypos = NP.hstack((skypos,nvect))
@@ -449,13 +453,13 @@ true_g = NP.ones(n_antennas)
 
 # Get an approximation to the dynamic range 
 # - just use median within beam instead of rms
-drange = NP.zeros(im_stack.shape[0])
+d_range = NP.zeros(im_stack.shape[0])
 ind = NP.where(NP.sqrt(imgobj.gridl**2 + imgobj.gridm**2) < 0.3)
 
 for i in NP.arange(im_stack.shape[0]):
     tempim = im_stack[i,:,:].copy()
     tempim[nanind] = NP.nan
-    drange[i] = NP.nanmax(tempim)/NP.nanmedian(NP.abs(tempim - NP.nanmedian(tempim)))
+    d_range[i] = NP.nanmax(tempim)/NP.nanmedian(NP.abs(tempim - NP.nanmedian(tempim)))
 
 # Phase and amplitude convergence
 f_phases = PLT.figure("Phases")
@@ -467,8 +471,29 @@ for i in xrange(gain_stack.shape[1]):
     plot(NP.abs(data[:,i]/true_g[i]))
 PLT.figure(f_phases.number)
 xlabel('Calibration iteration')
-ylabel('Calibration phase')
+ylabel('Calibration phase (rad)')
 PLT.figure(f_amps.number)
 xlabel('Calibration iteration')
 ylabel('Calibration amplitude')
 
+f_pre_im = PLT.figure("pre_im")
+clf()
+imshow(pre_im,aspect='equal',origin='lower',extent=(imgobj.gridl.min(),imgobj.gridl.max(),imgobj.gridm.min(),imgobj.gridm.max()),interpolation='none')
+xlim([-1.0,1.0])
+ylim([-1.0,1.0])
+clim([0.0*NP.nanmin(pre_im),0.5*NP.nanmax(pre_im)])
+xlabel('l')
+ylabel('m')
+cb=colorbar(orientation='horizontal',ticks=[0,1200,2400,3600],pad=.1,shrink=.6,label='Jy/beam')
+title('Before Calibration')
+
+f_post_im = PLT.figure("post_im")
+clf()
+imshow(post_im,aspect='equal',origin='lower',extent=(imgobj.gridl.min(),imgobj.gridl.max(),imgobj.gridm.min(),imgobj.gridm.max()),interpolation='none')
+xlim([-1.0,1.0])
+ylim([-1.0,1.0])
+clim([0.0*NP.nanmin(post_im),0.5*NP.nanmax(post_im)])
+xlabel('l')
+ylabel('m')
+cb=colorbar(orientation='horizontal',ticks=[0,2500,5000,7500],pad=.1,shrink=.6,label='Jy/beam')
+title('After Calibration')
