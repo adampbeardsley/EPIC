@@ -128,7 +128,8 @@ ant_pos = ant_info[:,1:] # I'll let the cal class put it in wavelengths.
 #auto_noise_model = rxr_noise
 
 for pol in ['P1','P2']:
-    calarr[pol] = EPICal.cal(freqs,ant_pos,pol=pol,sim_mode=True,n_iter=cal_iter,damping_factor=0.35,inv_gains=False,sky_model=sky_model,exclude_autos=True)
+    #calarr[pol] = EPICal.cal(freqs,ant_pos,pol=pol,sim_mode=True,n_iter=cal_iter,damping_factor=0.35,inv_gains=False,sky_model=sky_model,exclude_autos=True)
+    calarr[pol] = EPICal.cal(freqs,ant_pos,pol=pol,sim_mode=True,n_iter=cal_iter,damping_factor=0.35,inv_gains=False,sky_model=sky_model,exclude_autos=True,conv_thresh=0.01, conv_max_try=200)
 
 # Create array of gains to watch them change
 ncal=itr/cal_iter
@@ -239,13 +240,16 @@ print 'Full loop took ', t2-t1, 'seconds'
 ### Do some plotting
 # TODO: change to object oriented plotting
 
+post_im = im_stack[-2,:,:]
+pre_im = im_stack[1,:,:]
 f_images = PLT.figure("Images",figsize=(15,5))
+clf()
 ax1 = PLT.subplot(121)
-imshow(im_stack[1,:,:],aspect='equal',origin='lower',extent=(imgobj.gridl.min(),imgobj.gridl.max(),imgobj.gridm.min(),imgobj.gridm.max()))
+imshow(pre_im,aspect='equal',origin='lower',extent=(imgobj.gridl.min(),imgobj.gridl.max(),imgobj.gridm.min(),imgobj.gridm.max()),interpolation='none')
 xlim([-.3,.3])
 ylim([-.3,.3])
 ax2 = PLT.subplot(122)
-imshow(im_stack[-2,:,:],aspect='equal',origin='lower',extent=(imgobj.gridl.min(),imgobj.gridl.max(),imgobj.gridm.min(),imgobj.gridm.max()))
+imshow(post_im,aspect='equal',origin='lower',extent=(imgobj.gridl.min(),imgobj.gridl.max(),imgobj.gridm.min(),imgobj.gridm.max()),interpolation='none')
 plot(sky_model[:,0,0],sky_model[:,0,1],'o',mfc='none',mec='red',mew=1,ms=10)
 xlim([-.3,.3])
 ylim([-.3,.3])
@@ -273,9 +277,9 @@ xlabel('Calibration Iteration')
 ylabel('Relative amplitude')
 
 # Histogram
-f_hist = PLT.figure("Histogram")
-PLT.hist(NP.real(data[-1,:]-true_g),histtype='step')
-PLT.hist(NP.imag(data[-1,:]-true_g),histtype='step')
+#f_hist = PLT.figure("Histogram")
+#PLT.hist(NP.real(data[-1,:]-true_g),histtype='step')
+#PLT.hist(NP.imag(data[-1,:]-true_g),histtype='step')
 
 # Expected noise
 #Nmeas_eff = itr
@@ -285,7 +289,42 @@ visvar = NP.sum(sky_model[:,2,3])**2 / Nmeas_eff
 gvar = 4 * visvar / (NP.sum(abs(true_g.reshape(1,calarr['P1'].n_ant) * calarr['P1'].model_vis[:,:,2])**2,axis=1) - NP.abs(true_g * NP.diag(calarr['P1'].model_vis[:,:,2])))
 
 
-with open('/data2/beards/tmp/sim_run.pickle','w') as f:
-    pickle.dump([calarr,gain_stack,im_stack,sky_model,cal_iter],f)
+#with open('/data2/beards/tmp/sim_run.pickle','w') as f:
+#    pickle.dump([calarr,gain_stack,im_stack,sky_model,cal_iter],f)
 
+# Get SNR on each source
+region_size = 0.07 # units of l
+psf_size = .02
+bg_map = post_im.copy()
+for i in np.arange(n_src):
+    ind = np.where((np.sqrt((imgobj.gridl-sky_model[i,0,0])**2+(imgobj.gridm-sky_model[i,0,1])**2)<psf_size))
+    bg_map[ind] = NP.nan
 
+source_snr = np.zeros(n_src)
+for i in np.arange(n_src):
+    ind1 = np.where((np.sqrt((imgobj.gridl-sky_model[i,0,0])**2+(imgobj.gridm-sky_model[i,0,1])**2)<psf_size))
+    #ind2 = np.where((np.sqrt((imgobj.gridl-sky_model[i,0,0])**2+(imgobj.gridm-sky_model[i,0,1])**2)<region_size) & (np.sqrt((imgobj.gridl-sky_model[i,0,0])**2+(imgobj.gridm-sky_model[i,0,1])**2)>psf_size))
+    ind2 = np.where((np.sqrt((imgobj.gridl-sky_model[i,0,0])**2+(imgobj.gridm-sky_model[i,0,1])**2)<region_size))
+    #source_snr[i] = NP.nanmax(post_im[ind1])/NP.nanstd(post_im[ind2])
+    #source_snr[i] = (NP.nanmax(post_im[ind1])-NP.nanmedian(bg_map[ind2]))/NP.nanmedian(NP.abs(bg_map[ind2]-NP.nanmedian(bg_map[ind2])))
+    source_snr[i] = (NP.nanmax(post_im[ind1])-NP.nanmean(bg_map[ind2]))/NP.nanstd(bg_map[ind2])
+
+snr_map = np.zeros(post_im.shape)
+noise_map = np.zeros(post_im.shape)
+signal_map = np.zeros(post_im.shape)
+for i in np.arange(post_im.shape[0]):
+    m = imgobj.gridm[i,0]
+    print m
+    if abs(m) > .3: continue
+    for j in np.arange(post_im.shape[1]):
+        l = imgobj.gridl[i,j]
+        if (sqrt(l**2+m**2)>.3): continue
+        ind1 = np.where((np.sqrt((imgobj.gridl-l)**2+(imgobj.gridm-m)**2)<psf_size))
+        #ind2 = np.where((np.sqrt((imgobj.gridl-l)**2+(imgobj.gridm-m)**2)<region_size) & (np.sqrt((imgobj.gridl-l)**2+(imgobj.gridm-m)**2)>psf_size))
+        ind2 = np.where((np.sqrt((imgobj.gridl-l)**2+(imgobj.gridm-m)**2)<region_size))
+
+        #snr_map[i,j] = (post_im[i,j]-NP.nanmedian(post_im[ind2]))/NP.nanmedian(NP.abs(post_im[ind2]-NP.nanmedian(post_im[ind2])))
+        #snr_map[i,j] = (NP.abs(post_im[i,j])-NP.nanmedian(post_im[ind2]))/NP.nanstd(post_im[ind2])
+        signal_map[i,j] = (NP.abs(post_im[i,j])-NP.nanmean(bg_map[ind2]))
+        #noise_map[i,j] = NP.nanmedian(NP.abs(post_im[ind2]-NP.nanmedian(post_im[ind2])))
+        noise_map[i,j] = NP.nanstd(bg_map[ind2])
