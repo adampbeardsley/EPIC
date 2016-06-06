@@ -129,18 +129,14 @@ ant_pos = ant_info[:, 1:]  # I'll let the cal class put it in wavelengths.
 # auto_noise_model = rxr_noise
 
 for pol in ['P1', 'P2']:
-    # calarr[pol] = EPICal.cal(freqs,ant_pos,pol=pol,sim_mode=True,n_iter=cal_iter,damping_factor=0.35,inv_gains=False,sky_model=sky_model,exclude_autos=True)
     calarr[pol] = EPICal.cal(freqs, ant_pos, pol=pol, sim_mode=True, n_iter=cal_iter,
                              damping_factor=0.35, inv_gains=False, sky_model=sky_model,
-                             exclude_autos=True, conv_thresh=0.01, conv_max_try=200)
+                             exclude_autos=True)
 
 # Create array of gains to watch them change
 ncal = itr / cal_iter
 cali = 0
 gain_stack = NP.zeros((ncal + 1, ant_info.shape[0], nchan), dtype=NP.complex64)
-
-PLT.ion()
-PLT.show()
 
 for i in xrange(itr):
     print i
@@ -208,19 +204,21 @@ for i in xrange(itr):
 
     if i == 0:
         imgobj = AA.NewImage(antenna_array=aar, pol='P1')
-        if make_ideal_cal:
-            aar.caldata['P1']['E-fields'][0, :, :] = ideal_data
-            imgobj_ideal = AA.NewImage(antenna_array=aar, pol='P1')
     else:
         imgobj.update(antenna_array=aar, reset=True)
-        if make_ideal_cal:
-            aar.caldata['P1']['E-fields'][0, :, :] = ideal_data
-            imgobj_ideal.update(antenna_array=aar, reset=True)
 
     imgobj.imagr(weighting='natural', pol='P1', pad=0, verbose=False,
                  grid_map_method=grid_map_method, cal_loop=True, stack=False)
-    imgobj_ideal.imagr(weighting='natural', pol='P1', pad=0, verbose=False,
-                       grid_map_method=grid_map_method, cal_loop=True, stack=False)
+
+    if make_ideal_cal:
+        aar.caldata['P1']['E-fields'][0, :, :] = ideal_data
+        if i == 0:
+            imgobj_ideal = AA.NewImage(antenna_array=aar, pol='P1')
+        else:
+            imgobj_ideal.update(antenna_array=aar, reset=True)
+
+        imgobj_ideal.imagr(weighting='natural', pol='P1', pad=0, verbose=False,
+                           grid_map_method=grid_map_method, cal_loop=True, stack=False)
 
     # update calibration
     calarr['P1'].update_cal(tempdata, imgobj)
