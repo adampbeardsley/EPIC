@@ -210,9 +210,9 @@ for i in xrange(itr):
     imgobj.imagr(weighting='natural', pol='P1', pad=0, verbose=False,
                  grid_map_method=grid_map_method, cal_loop=True, stack=False)
 
-    if (make_ideal_cal & (cali == (ncal - 1))):
+    if (make_ideal_cal & (cali == ncal)):
         aar.caldata['P1']['E-fields'][0, :, :] = ideal_data
-        if i == ((ncal - 1) * cal_iter):
+        if i == ((ncal - 1) * cal_iter + 1):
             imgobj_ideal = AA.NewImage(antenna_array=aar, pol='P1')
         else:
             imgobj_ideal.update(antenna_array=aar, reset=True)
@@ -229,7 +229,7 @@ for i in xrange(itr):
         im_stack[cali, :, :] = avg_img[:, :, 2].copy()
         temp_im = avg_img[:, :, 2]
         if make_ideal_cal:
-            avg_img_ideal = NP.zeros((ncal, avg_img.shape[0], avg_img.shape[1]), dtype=NP.double)
+            avg_img_ideal = NP.zeros((avg_img.shape[0], avg_img.shape[1]), dtype=NP.double)
 
         gain_stack[cali, :, :] = calarr['P1'].curr_gains
         cali += 1
@@ -237,7 +237,7 @@ for i in xrange(itr):
     else:
         avg_img = avg_img + imgobj.img['P1'].copy()
         temp_im = temp_im + imgobj.img['P1'][:, :, 2].copy()
-        if (make_ideal_cal & (cali == (ncal - 1))):
+        if (make_ideal_cal & (cali == ncal)):
             avg_img_ideal = avg_img_ideal + imgobj_ideal.img['P1'][:, :, 2].copy() / cal_iter
 
         if i % cal_iter == 0:
