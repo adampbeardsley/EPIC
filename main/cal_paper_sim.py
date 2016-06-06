@@ -210,7 +210,7 @@ for i in xrange(itr):
     imgobj.imagr(weighting='natural', pol='P1', pad=0, verbose=False,
                  grid_map_method=grid_map_method, cal_loop=True, stack=False)
 
-    if (make_ideal_cal & (cali=cal_iter - 1)):
+    if (make_ideal_cal & (cali == (cal_iter - 1))):
         aar.caldata['P1']['E-fields'][0, :, :] = ideal_data
         if i == 0:
             imgobj_ideal = AA.NewImage(antenna_array=aar, pol='P1')
@@ -237,7 +237,7 @@ for i in xrange(itr):
     else:
         avg_img = avg_img + imgobj.img['P1'].copy()
         temp_im = temp_im + imgobj.img['P1'][:, :, 2].copy()
-        if (make_ideal_cal & (cali=cal_iter - 1)):
+        if (make_ideal_cal & (cali == (cal_iter - 1))):
             avg_img_ideal = avg_img_ideal + imgobj_ideal.img['P1'][:, :, 2].copy() / cal_iter
 
         if i % cal_iter == 0:
@@ -294,7 +294,7 @@ plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=1, 
 title('After Calibration')
 
 if make_ideal_cal:
-    ideal_im = im_stack_ideal[-2, :, :]
+    ideal_im = avg_img_ideal
     f_ideal_im = PLT.figure("ideal_im")
     clf()
     imshow(ideal_im, aspect='equal', origin='lower',
