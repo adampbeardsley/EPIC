@@ -21,6 +21,7 @@ cal_iter = 400
 itr = 25 * cal_iter
 rxr_noise = 0.0
 model_frac = 1.0  # fraction of total sky flux to model
+make_ideal_cal = True
 
 grid_map_method = 'sparse'
 # grid_map_method='regular'
@@ -182,9 +183,9 @@ for i in xrange(itr):
     # Calibration steps
     # read in data array
     aar.caldata['P1'] = aar.get_E_fields('P1', sort=True)
-    tempdata = aar.caldata['P1']['E-fields'][0, :, :].copy()
+    ideal_data = aar.caldata['P1']['E-fields'][0, :, :].copy()
     # tempdata[:,2]/=NP.abs(tempdata[0,2]) # uncomment this line to make noise = 0 for single source
-    tempdata = calarr['P1'].apply_cal(tempdata, meas=True)
+    tempdata = calarr['P1'].apply_cal(ideal_data, meas=True)
     tempdata += (NP.sqrt(rxr_noise) / NP.sqrt(2) *
                  (NP.random.normal(loc=0.0, scale=1, size=tempdata.shape) + 1j *
                   NP.random.normal(loc=0.0, scale=1, size=tempdata.shape)))
@@ -207,11 +208,19 @@ for i in xrange(itr):
 
     if i == 0:
         imgobj = AA.NewImage(antenna_array=aar, pol='P1')
+        if make_ideal_cal:
+            aar.caldata['P1']['E-fields'][0, :, :] = ideal_data
+            imgobj_ideal = AA.NewImage(antenna_array=aar, pol='P1')
     else:
         imgobj.update(antenna_array=aar, reset=True)
+        if make_ideal_cal:
+            aar.caldata['P1']['E-fields'][0, :, :] = ideal_data
+            imgobj_ideal.update(antenna_array=aar, reset=True)
 
     imgobj.imagr(weighting='natural', pol='P1', pad=0, verbose=False,
                  grid_map_method=grid_map_method, cal_loop=True, stack=False)
+    imgobj_ideal.imagr(weighting='natural', pol='P1', pad=0, verbose=False,
+                       grid_map_method=grid_map_method, cal_loop=True, stack=False)
 
     # update calibration
     calarr['P1'].update_cal(tempdata, imgobj)
@@ -221,6 +230,12 @@ for i in xrange(itr):
         im_stack = NP.zeros((ncal, avg_img.shape[0], avg_img.shape[1]), dtype=NP.double)
         im_stack[cali, :, :] = avg_img[:, :, 2].copy()
         temp_im = avg_img[:, :, 2]
+        if make_ideal_cal:
+            avg_img_ideal = imgobj_ideal.img['P1'].copy()
+            im_stack_ideal = NP.zeros((ncal, avg_img_ideal.shape[0],
+                                       avg_img_ideal.shape[1]), dtype=NP.double)
+            im_stack_ideal[cali, :, :] = avg_img_ideal[:, :, 2].copy()
+            temp_im_ideal = avg_img_ideal[:, :, 2]
 
         gain_stack[cali, :, :] = calarr['P1'].curr_gains
         cali += 1
@@ -228,23 +243,18 @@ for i in xrange(itr):
     else:
         avg_img = avg_img + imgobj.img['P1'].copy()
         temp_im = temp_im + imgobj.img['P1'][:, :, 2].copy()
+        if make_ideal_cal:
+            avg_img_ideal = avg_img_ideal + imgobj_ideal.img['P1'].copy()
+            temp_im_ideal = temp_im_ideal + imgobj_ideal.img['P1'][:, :, 2].copy()
 
         if i % cal_iter == 0:
             im_stack[cali, :, :] = temp_im / cal_iter
             temp_im[:] = 0.0
+            if make_ideal_cal:
+                im_stack_ideal[cali, :, :] = temp_im_ideal / cal_iter
+                temp_im_ideal[:] = 0.0
             gain_stack[cali, :, :] = calarr['P1'].curr_gains
             cali += 1
-
-            data = gain_stack[0:cali, :, 2] * (calarr['P1'].sim_gains[calarr['P1'].ref_ant, 2] *
-                                               NP.conj(gain_stack[1, calarr['P1'].ref_ant, 2]) /
-                                               NP.abs(calarr['P1'].sim_gains[calarr['P1'].ref_ant, 2] *
-                                               gain_stack[1, calarr['P1'].ref_ant, 2]))
-            true_g = calarr['P1'].sim_gains[:, 2]
-
-            PLT.cla()
-            for ant in xrange(gain_stack.shape[1]):
-                PLT.plot(NP.angle(data[:, ant] * NP.conj(true_g[ant])))
-            PLT.draw()
 
     if True in NP.isnan(calarr['P1'].cal_corr):
         print 'NAN in calibration gains! exiting!'
@@ -259,23 +269,53 @@ print 'Full loop took ', t2 - t1, 'seconds'
 # *** Do some plotting
 # TODO: change to object oriented plotting
 
-post_im = im_stack[-2, :, :]
 pre_im = im_stack[1, :, :]
-f_images = PLT.figure("Images", figsize=(15, 5))
+f_pre_im = PLT.figure("pre_im")
 clf()
-ax1 = PLT.subplot(121)
 imshow(pre_im, aspect='equal', origin='lower',
-       extent=(imgobj.gridl.min(), imgobj.gridl.max(), imgobj.gridm.min(),
-               imgobj.gridm.max()), interpolation='none')
+       extent=(imgobj.gridl.min(), imgobj.gridl.max(),
+               imgobj.gridm.min(), imgobj.gridm.max()),
+       interpolation='none')
 xlim([-.3, .3])
 ylim([-.3, .3])
-ax2 = PLT.subplot(122)
+# clim([0.0*NP.nanmin(pre_im),0.5*NP.nanmax(pre_im)])
+xlabel('l')
+ylabel('m')
+# cb=colorbar(orientation='horizontal',ticks=[0,1200,2400,3600],pad=.1,shrink=.6,label='Jy/beam')
+title('Before Calibration')
+
+post_im = im_stack[-2, :, :]
+f_post_im = PLT.figure("post_im")
+clf()
 imshow(post_im, aspect='equal', origin='lower',
-       extent=(imgobj.gridl.min(), imgobj.gridl.max(), imgobj.gridm.min(),
-               imgobj.gridm.max()), interpolation='none')
-plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=1, ms=10)
+       extent=(imgobj.gridl.min(), imgobj.gridl.max(),
+               imgobj.gridm.min(), imgobj.gridm.max()),
+       interpolation='none')
 xlim([-.3, .3])
 ylim([-.3, .3])
+# clim([0.0*NP.nanmin(post_im),0.5*NP.nanmax(post_im)])
+xlabel('l')
+ylabel('m')
+# cb=colorbar(orientation='horizontal',ticks=[0,2500,5000,7500],pad=.1,shrink=.6,label='Jy/beam')
+plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=1, ms=10)
+title('After Calibration')
+
+if make_ideal_cal:
+    ideal_im = im_stack_ideal[-2, :, :]
+    f_ideal_im = PLT.figure("ideal_im")
+    clf()
+    imshow(ideal_im, aspect='equal', origin='lower',
+           extent=(imgobj_ideal.gridl.min(), imgobj_ideal.gridl.max(),
+                   imgobj_ideal.gridm.min(), imgobj_ideal.gridm.max()),
+           interpolation='none')
+    xlim([-.3, .3])
+    ylim([-.3, .3])
+    # clim([0.0*NP.nanmin(post_im),0.5*NP.nanmax(post_im)])
+    xlabel('l')
+    ylabel('m')
+    # cb=colorbar(orientation='horizontal',ticks=[0,2500,5000,7500],pad=.1,shrink=.6,label='Jy/beam')
+    plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=1, ms=10)
+    title('Perfect Calibration')
 
 # remove some arbitrary phases.
 data = gain_stack[0:-1, :, 2] * (calarr['P1'].sim_gains[calarr['P1'].ref_ant, 2] *
