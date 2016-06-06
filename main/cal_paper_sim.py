@@ -172,7 +172,7 @@ for i in xrange(itr):
             adict['flags'][pol] = False
             adict['Et'][pol] = E_timeseries_dict['Et'][:, ind]
             adict['wtsinfo'][pol] = [{'orientation': 0.0,
-                                      'lookup': '/data3/t_nithyanandan/''
+                                      'lookup': '/data3/t_nithyanandan/'
                                       'project_MOFF/simulated/LWA/data/lookup/'
                                       'E_illumination_isotropic_radiators_lookup_zenith.txt'}]
 
