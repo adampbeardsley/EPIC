@@ -321,7 +321,7 @@ gvar = 4 * visvar / (NP.sum(abs(true_g.reshape(1, calarr['P1'].n_ant) *
 #    pickle.dump([calarr,gain_stack,im_stack,sky_model,cal_iter],f)
 
 # Get SNR on each source
-region_size = 0.07  # units of l
+region_size = 0.1  # units of l
 psf_size = .02
 bg_map = post_im.copy()
 for i in np.arange(n_src):
@@ -330,12 +330,18 @@ for i in np.arange(n_src):
     bg_map[ind] = NP.nan
 
 source_snr = np.zeros(n_src)
+source_s = np.zeros(n_src)
+nbins = 100
 for i in np.arange(n_src):
     ind1 = np.where((np.sqrt((imgobj.gridl - sky_model[i, 0, 0])**2 +
-                    (imgobj.gridm - sky_model[i, 0, 1])**2) < psf_size))
+                             (imgobj.gridm - sky_model[i, 0, 1])**2) < psf_size))
     ind2 = np.where((np.sqrt((imgobj.gridl - sky_model[i, 0, 0])**2 +
-                    (imgobj.gridm - sky_model[i, 0, 1])**2) < region_size))
-    source_snr[i] = (NP.nanmax(post_im[ind1]) - NP.nanmean(bg_map[ind2])) / NP.nanstd(bg_map[ind2])
+                             (imgobj.gridm - sky_model[i, 0, 1])**2) < region_size))
+    source_ind = NP.unravel_index(NP.argmin((imgobj.gridl - sky_model[i, 0, 0])**2 +
+                                  (imgobj.gridm - sky_model[i, 0, 1])**2), post_im.shape)
+    # source_snr[i] = (NP.nanmax(post_im[ind1]) - NP.nanmean(bg_map[ind2])) / NP.nanstd(bg_map[ind2])
+    source_snr[i] = (post_im[source_ind] - NP.nanmean(bg_map[ind2])) / NP.nanstd(bg_map[ind2])
+    source_s[i] = post_im[source_ind]
 
 snr_map = np.zeros(post_im.shape)
 noise_map = np.zeros(post_im.shape)
@@ -352,5 +358,7 @@ for i in np.arange(post_im.shape[0]):
         ind1 = np.where((np.sqrt((imgobj.gridl - l)**2 + (imgobj.gridm - m)**2) < psf_size))
         ind2 = np.where((np.sqrt((imgobj.gridl - l)**2 + (imgobj.gridm - m)**2) < region_size))
 
-        signal_map[i, j] = (NP.abs(post_im[i, j]) - NP.nanmean(bg_map[ind2]))
+        # signal_map[i, j] = NP.abs(post_im[i, j] - NP.nanmean(bg_map[ind2]))
+        signal_map[i, j] = post_im[i, j] - NP.nanmean(bg_map[ind2])
         noise_map[i, j] = NP.nanstd(bg_map[ind2])
+        # noise_map[i, j] = NP.nanmedian(NP.abs(bg_map[ind2] - NP.nanmedian(bg_map[ind2])))
