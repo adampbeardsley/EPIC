@@ -243,9 +243,6 @@ for i in xrange(itr):
         if i % cal_iter == 0:
             im_stack[cali, :, :] = temp_im / cal_iter
             temp_im[:] = 0.0
-            if make_ideal_cal:
-                im_stack_ideal[cali, :, :] = temp_im_ideal / cal_iter
-                temp_im_ideal[:] = 0.0
             gain_stack[cali, :, :] = calarr['P1'].curr_gains
             cali += 1
 
