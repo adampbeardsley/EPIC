@@ -268,10 +268,10 @@ imshow(pre_im, aspect='equal', origin='lower',
        interpolation='none')
 xlim([-.3, .3])
 ylim([-.3, .3])
-# clim([0.0*NP.nanmin(pre_im),0.5*NP.nanmax(pre_im)])
+clim([0.0, 1])
 xlabel('l')
 ylabel('m')
-# cb=colorbar(orientation='horizontal',ticks=[0,1200,2400,3600],pad=.1,shrink=.6,label='Jy/beam')
+cb = colorbar(orientation='horizontal', pad=.1, ticks=[0, .25, .5, .75, 1.0], shrink=.6, label='Jy/beam')
 title('Before Calibration')
 
 post_im = im_stack[-2, :, :]
@@ -283,10 +283,10 @@ imshow(post_im, aspect='equal', origin='lower',
        interpolation='none')
 xlim([-.3, .3])
 ylim([-.3, .3])
-# clim([0.0*NP.nanmin(post_im),0.5*NP.nanmax(post_im)])
+clim([0.0, 1])
 xlabel('l')
 ylabel('m')
-# cb=colorbar(orientation='horizontal',ticks=[0,2500,5000,7500],pad=.1,shrink=.6,label='Jy/beam')
+cb = colorbar(orientation='horizontal', pad=.1, ticks=[0, .25, .5, .75, 1.0], shrink=.6, label='Jy/beam')
 # plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=1, ms=10)
 title('After Calibration')
 
@@ -297,14 +297,14 @@ if make_ideal_cal:
     imshow(ideal_im, aspect='equal', origin='lower',
            extent=(imgobj_ideal.gridl.min(), imgobj_ideal.gridl.max(),
                    imgobj_ideal.gridm.min(), imgobj_ideal.gridm.max()),
-           interpolation='none')
+           interpolation='nearest')
     xlim([-.3, .3])
     ylim([-.3, .3])
-    # clim([0.0*NP.nanmin(post_im),0.5*NP.nanmax(post_im)])
+    clim([0.0, 1])
     xlabel('l')
     ylabel('m')
-    # cb=colorbar(orientation='horizontal',ticks=[0,2500,5000,7500],pad=.1,shrink=.6,label='Jy/beam')
-    plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=1, ms=20)
+    cb = colorbar(orientation='horizontal', pad=.1, ticks=[0, .25, .5, .75, 1.0], shrink=.6, label='Jy/beam')
+    plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=.75, ms=15)
     title('Perfect Calibration')
 
 # remove some arbitrary phases.
