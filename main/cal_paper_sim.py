@@ -287,7 +287,7 @@ ylim([-.3, .3])
 xlabel('l')
 ylabel('m')
 # cb=colorbar(orientation='horizontal',ticks=[0,2500,5000,7500],pad=.1,shrink=.6,label='Jy/beam')
-plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=1, ms=10)
+# plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=1, ms=10)
 title('After Calibration')
 
 if make_ideal_cal:
@@ -304,7 +304,7 @@ if make_ideal_cal:
     xlabel('l')
     ylabel('m')
     # cb=colorbar(orientation='horizontal',ticks=[0,2500,5000,7500],pad=.1,shrink=.6,label='Jy/beam')
-    plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=1, ms=10)
+    plot(sky_model[:, 0, 0], sky_model[:, 0, 1], 'o', mfc='none', mec='red', mew=1, ms=20)
     title('Perfect Calibration')
 
 # remove some arbitrary phases.
