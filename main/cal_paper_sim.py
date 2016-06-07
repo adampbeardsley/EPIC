@@ -316,7 +316,9 @@ true_g = calarr['P1'].sim_gains[:, 2]
 
 # Phase and amplitude convergence
 f_phases = PLT.figure("Phases")
+clf()
 f_amps = PLT.figure("Amplitudes")
+clf()
 for i in xrange(gain_stack.shape[1]):
     PLT.figure(f_phases.number)
     plot(NP.angle(data[:, i] * NP.conj(true_g[i])))
