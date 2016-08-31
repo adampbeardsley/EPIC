@@ -121,7 +121,7 @@ for it in xrange(max_n_timestamps):
     progress.finish()
 
     aar.update(update_info, parallel=True, verbose=True)
-    aar.get_E_fields('P1')
+    aar.caldata['P1'] = aar.get_E_fields('P1')  # Trick aar into thinking it's doing the right thing.
     aar.caldata['P1']['E-fields'][0, :, :] = ant_data[it, :, :]  # Put real data in
     aar.grid_convolve(pol='P1', method='NN', distNN=0.5 * FCNST.c / f0,
                       tol=1.0e-6, maxmatch=1, identical_antennas=True,
