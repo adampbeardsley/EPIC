@@ -122,7 +122,7 @@ for it in xrange(max_n_timestamps):
 
     aar.update(update_info, parallel=True, verbose=True)
     aar.caldata['P1'] = aar.get_E_fields('P1')  # Trick aar into thinking it's doing the right thing.
-    aar.caldata['P1']['E-fields'][0, :, :] = ant_data[it, :, :]  # Put real data in
+    aar.caldata['P1']['E-fields'][0, :, :] = ant_data[it, :, :-1, 0]  # Put real data in (drop last channel because of rounding odd/2)
     aar.grid_convolve(pol='P1', method='NN', distNN=0.5 * FCNST.c / f0,
                       tol=1.0e-6, maxmatch=1, identical_antennas=True,
                       cal_loop=False, gridfunc_freq='scale', mapping='weighted',
