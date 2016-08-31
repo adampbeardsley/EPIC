@@ -80,8 +80,9 @@ for it in xrange(max_n_timestamps):
 
     print 'Consolidating Antenna updates...'
     progress = PGB.ProgressBar(widgets=[PGB.Percentage(), PGB.Bar(marker='-',
-                               left=' |', right='| '), PGB.Counter(),
-                               '/{0:0d} Antennas '.format(n_antennas), PGB.ETA()]
+                                        left=' |', right='| '), PGB.Counter(),
+                                        '/{0:0d} Antennas '.format(n_antennas),
+                                        PGB.ETA()],
                                maxval=n_antennas).start()
     antnum = 0
     for ia, label in enumerate(antid):
