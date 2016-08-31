@@ -105,7 +105,7 @@ for it in xrange(max_n_timestamps):
         for ip in range(npol):
             adict['delaydict']['P{0}'.format(ip + 1)] = {}
             adict['delaydict']['P{0}'.format(ip + 1)]['frequencies'] = freqs
-            adict['delaydict']['P{0}'.format(ip + 1)]['delays'] = cable_delays[antennas == label]
+            # adict['delaydict']['P{0}'.format(ip + 1)]['delays'] = cable_delays[antennas == label]
             adict['delaydict']['P{0}'.format(ip + 1)]['fftshifted'] = True
             adict['wtsinfo']['P{0}'.format(ip + 1)] = [{'orientation':0.0, 'lookup':'/data3/t_nithyanandan/project_MOFF/simulated/LWA/data/lookup/E_illumination_isotropic_radiators_lookup_zenith.txt'}]
             adict['Et']['P{0}'.format(ip + 1)] = ant_data[it, ia, :nts, ip]  # Stuff with the wrong data
