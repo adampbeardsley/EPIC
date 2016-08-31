@@ -50,7 +50,7 @@ ant_data = ant_data[:, core_ind, :, :]
 ants = []
 aar = AA.AntennaArray()
 for i in xrange(n_antennas):
-    ant = AA.Antenna('{0:0d}'.format(int(ant_info[i, 0])), lat, ant_info[i, 1:], f0, nsamples=nts)
+    ant = AA.Antenna('{0:0d}'.format(int(ant_info[i, 0])), lat, ant_info[i, 1:], f0, nsamples=2 * nchan)
     ant.f = ant.f0 + DSP.spectax(nchan, dt, shift=True)
     ants += [ant]
     aar = aar + ant
