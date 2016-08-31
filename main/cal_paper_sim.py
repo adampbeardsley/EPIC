@@ -394,3 +394,9 @@ for i in np.arange(post_im.shape[0]):
         signal_map[i, j] = post_im[i, j] - NP.nanmean(bg_map[ind2])
         noise_map[i, j] = NP.nanstd(bg_map[ind2])
         # noise_map[i, j] = NP.nanmedian(NP.abs(bg_map[ind2] - NP.nanmedian(bg_map[ind2])))
+
+ind = np.where(~np.isnan(bg_map) & (noise_map > 0))
+bg_snr = signal_map[ind] / noise_map[ind]
+f_snr_hist = PLT.figure("Background Histogram")
+clf()
+PLT.hist(bg_snr, bins=100)
