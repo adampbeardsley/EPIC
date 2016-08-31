@@ -109,7 +109,7 @@ for it in xrange(max_n_timestamps):
             adict['delaydict']['P{0}'.format(ip + 1)]['fftshifted'] = True
             adict['wtsinfo']['P{0}'.format(ip + 1)] = [{'orientation':0.0, 'lookup':'/data3/t_nithyanandan/project_MOFF/simulated/LWA/data/lookup/E_illumination_isotropic_radiators_lookup_zenith.txt'}]
             adict['Et']['P{0}'.format(ip + 1)] = ant_data[it, ia, :nts, ip]  # Stuff with the wrong data
-            if NP.any(NP.isnan(adict['Ef']['P{0}'.format(ip + 1)])):
+            if NP.any(NP.isnan(adict['Et']['P{0}'.format(ip + 1)])):
                 adict['flags']['P{0}'.format(ip + 1)] = True
             else:
                 adict['flags']['P{0}'.format(ip + 1)] = False
