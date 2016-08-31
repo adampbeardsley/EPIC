@@ -23,6 +23,7 @@ max_n_timestamps = 4
 lat = du.latitude
 f0 = du.center_freq
 nchan = du.nchan
+nts = nchan / 2  # For now this is necessary to get the aar to create freq-ordered data
 fs = du.sample_rate
 dt = 1 / fs
 freqs = du.freq
@@ -50,7 +51,7 @@ ant_data = ant_data[:, core_ind, :, :]
 ants = []
 aar = AA.AntennaArray()
 for i in xrange(n_antennas):
-    ant = AA.Antenna('{0:0d}'.format(int(ant_info[i, 0])), lat, ant_info[i, 1:], f0, nsamples=2 * nchan)
+    ant = AA.Antenna('{0:0d}'.format(int(ant_info[i, 0])), lat, ant_info[i, 1:], f0, nsamples=nts)
     ant.f = ant.f0 + DSP.spectax(nchan, dt, shift=True)
     ants += [ant]
     aar = aar + ant
@@ -107,7 +108,7 @@ for it in xrange(max_n_timestamps):
             adict['delaydict']['P{0}'.format(ip + 1)]['delays'] = cable_delays[antennas == label]
             adict['delaydict']['P{0}'.format(ip + 1)]['fftshifted'] = True
             adict['wtsinfo']['P{0}'.format(ip + 1)] = [{'orientation':0.0, 'lookup':'/data3/t_nithyanandan/project_MOFF/simulated/LWA/data/lookup/E_illumination_isotropic_radiators_lookup_zenith.txt'}]
-            adict['Ef']['P{0}'.format(ip + 1)] = ant_data[it, ia, :, ip]
+            adict['Et']['P{0}'.format(ip + 1)] = ant_data[it, ia, :nts, ip]  # Stuff with the wrong data
             if NP.any(NP.isnan(adict['Ef']['P{0}'.format(ip + 1)])):
                 adict['flags']['P{0}'.format(ip + 1)] = True
             else:
@@ -120,6 +121,8 @@ for it in xrange(max_n_timestamps):
     progress.finish()
 
     aar.update(update_info, parallel=True, verbose=True)
+    aar.get_E_fields('P1')
+    aar.caldata['P1']['E-fields'][0, :, :] = ant_data[it, :, :]  # Put real data in
     aar.grid_convolve(pol='P1', method='NN', distNN=0.5 * FCNST.c / f0,
                       tol=1.0e-6, maxmatch=1, identical_antennas=True,
                       cal_loop=False, gridfunc_freq='scale', mapping='weighted',
