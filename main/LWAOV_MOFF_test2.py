@@ -201,10 +201,10 @@ for i in xrange(max_n_timestamps):
     # ## Steps to inject actual data
     for pol in pols:
         aar.caldata[pol] = aar.get_E_fields(pol, sort=True)
-        tempdata = NP.exp(2j * .1 * antpos[:, 0].reshape(n_antennas, 1) *
-                          freqs[:-1].reshape(1, -1) / FCNST.speed_of_light)
-        # aar.caldata[pol]['E-fields'][0, :, :] = ant_data[i, :, :-1, 0]
-        aar.caldata[pol]['E-fields'][0, :, :] = tempdata
+        # tempdata = NP.exp(2j * .1 * antpos[:, 0].reshape(n_antennas, 1) *
+        #                   freqs[:-1].reshape(1, -1) / FCNST.speed_of_light)
+        aar.caldata[pol]['E-fields'][0, :, :] = ant_data[i, :, :-1, 0]
+        # aar.caldata[pol]['E-fields'][0, :, :] = tempdata
 
     if grid_map_method == 'regular':
         aar.grid_convolve_new(pol='P1', method='NN',
@@ -243,4 +243,4 @@ print 'Full loop took ', t2 - t1, 'seconds'
 
 avg_uv = NP.fft.fftshift(NP.fft.fft2(avg_img))
 avg_uv[253:260, 253:260] = 0
-avg_img_no_autos = NP.fft.ifft2(NP.fft.fftshift(avg_uv))
+avg_img_no_autos = NP.real(NP.fft.ifft2(NP.fft.fftshift(avg_uv)))
