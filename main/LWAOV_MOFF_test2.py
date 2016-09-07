@@ -30,8 +30,9 @@ from scipy import interpolate
 t1 = time.time()
 
 # Get file, read in header
-infile = '/data5/LWA_OV_data/data_raw/jun11/47mhz/2016-06-11-08:00:37_0000032252559360.000000.dada.CDF'
+infile = '/data5/LWA_OV_data/data_raw/jun11/47mhz/2016-06-11-08:00:37_0000000000000000.000000.dada.CDF'
 du = DI.DataHandler(indata=infile)
+du.antid = NP.sort(du.antid)
 lat = du.latitude
 f0 = du.center_freq
 nchan = du.nchan
@@ -54,7 +55,7 @@ npol = du.npol
 ant_data = du.data
 
 # Make some choices about the analysis
-max_n_timestamps = 10
+max_n_timestamps = 1000
 min_timestamp = 0
 bchan = 0  # beginning channel (to cut out edges of the bandpass)
 echan = 108  # ending channel
@@ -134,7 +135,7 @@ for i in xrange(n_antennas):
     ants += [ant]
     aar = aar + ant
 
-aar.grid(uvspacing=0.25, xypad=2 * NP.max([ant_sizex, ant_sizey]))
+aar.grid(uvspacing=0.4, xypad=2 * NP.max([ant_sizex, ant_sizey]))
 antpos_info = aar.antenna_positions(sort=True, centering=True)
 
 # Select time steps
@@ -242,5 +243,21 @@ t2 = time.time()
 print 'Full loop took ', t2 - t1, 'seconds'
 
 avg_uv = NP.fft.fftshift(NP.fft.fft2(avg_img))
-avg_uv[253:260, 253:260] = 0
+# avg_uv[253:260, 253:260] = 0
+avg_uv[127:130, 127:130] = 0
 avg_img_no_autos = NP.real(NP.fft.ifft2(NP.fft.fftshift(avg_uv)))
+
+nanind = NP.where(imgobj.gridl**2 + imgobj.gridm**2 > 1.0)
+avg_img_no_autos[nanind] = NP.nan  # mask out non-physical pixels
+
+f_image = PLT.figure("LWA OV Image")
+clf()
+imshow(avg_img_no_autos, aspect='equal', origin='lower',
+       extent=(imgobj.gridl.min(), imgobj.gridl.max(), imgobj.gridm.min(), imgobj.gridm.max()),
+       interpolation='none')
+xlim([-1.0, 1.0])
+ylim([-1.0, 1.0])
+xlabel('l')
+ylabel('m')
+colorbar()
+# clim([0.0*NP.nanmin(pre_im),0.5*NP.nanmax(pre_im)])
