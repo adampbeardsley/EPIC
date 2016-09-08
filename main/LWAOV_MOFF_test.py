@@ -129,7 +129,7 @@ if identical_antennas:
 ants = []
 aar = AA.AntennaArray()
 for i in xrange(n_antennas):
-    ant = AA.Antenna('{0:0d}'.format(int(ant_info[i, 0])), lat, ant_info[i, 1:],
+    ant = AA.Antenna('{0:0d}'.format(int(ant_info[i, 0])), '0', lat, -118.28, ant_info[i, 1:],
                      f0, nsamples=nts, aperture=ant_aprtrs[i])
     ant.f = ant.f0 + DSP.spectax(2 * nts, dt, shift=True)
     ants += [ant]
