@@ -217,7 +217,7 @@ avg_img_no_autos[nanind] = NP.nan  # mask out non-physical pixels
 
 f_image = PLT.figure("LWA OV Image")
 clf()
-imshow(avg_img_no_autos, aspect='equal', origin='lower',
+imshow(avg_img_no_autos, aspect='equal',  # origin='lower',
        extent=(imgobj.gridl.min(), imgobj.gridl.max(), imgobj.gridm.min(), imgobj.gridm.max()),
        interpolation='none')
 xlim([-1.0, 1.0])
@@ -225,4 +225,3 @@ ylim([-1.0, 1.0])
 xlabel('l')
 ylabel('m')
 colorbar()
-# clim([0.0*NP.nanmin(pre_im),0.5*NP.nanmax(pre_im)])
