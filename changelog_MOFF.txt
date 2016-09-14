@@ -1,3 +1,1217 @@
+From a20093a (FX-input):
+=======================
+
+(*) No major changes in this version. Just testing.
+
+From 607d0a4 (FX-input):
+=======================
+
+In antenna_array.py,
+
+(*) Update checking of NaN values in both Ef and Et attributes in
+member function update_flags() of class PolInfo and update flags
+accordingly
+
+From 354594d (FX-input):
+=======================
+
+In antenna_array.py,
+
+(*) Update member function update() of class AntennaArray to update
+electric field spectrum
+(*) Update member function update() of class Antenna to update
+electric field spectrum. Update docstring accordingly
+
+From 18e1c6d (data-interface), 0ef6465 (master):
+===============================================
+
+(*) Merge changes in data-interface onto master branch
+
+From 40dada5 (versatility):
+==========================
+
+(*) Commit stashed script changes (not very important)
+
+From 40dada5 (data-interface):
+=============================
+
+In data_interace.py,
+
+(*) Add classes DataContainer and DataStreamer to store and retrieve
+voltage data in a generic format
+
+From 75cbe1a (sim-uv):
+=====================
+
+In antenna_array.py,
+
+(*) Minor changes in estimation of nearest neighbour pixel value
+averaged over frequency in member function getStats() of class
+NewImage. It has not been thoroughly tested yet.
+
+From c42f325 (sim-uv):
+=====================
+
+In antenna_array.py,
+
+(*) Estimate nearest neighbour spectrum and average in member function
+getStats() of class NewImage. Update member function docstring
+accordingly
+
+From 3440502 (sim-uv):
+=====================
+
+In antenn_array.py,
+
+(*) Fix bugs in AntennaArray.genMappingMatrix() to compute antenna
+to grid mapping only when necessary
+
+From 0e6acd6 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Fix bugs to allow simulation of antenna electric fields through
+aperture plane computations
+
+From 6398b6e (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Remove commented and obsolete member function applyApertureWts()
+of class AntennaArraySimulator
+
+From 2585010 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Add keyword input aperture_updates in member function
+observing_run( of class AntennaArraySimulator. Update member function
+docstring accordingly
+(*) Modify member function observing_run() of class
+AntennaArraySimulator to pass aperture updates in call to observe()
+member function of same class.                      
+(*) Modif docstring of member function observe() of class
+AntennaArraySimulator.
+
+From 26d7c7c (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Add input keyword aperture_info in member function observe() of
+class AntennaArraySimulator. Update member function docstring
+accordingly
+(*) Modify member function observe() of class AntennaArraySimulator
+to update antenna apertures
+
+From b2dabdc (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Create member function update_apertures() along with docstring
+under class AntennaArraySimulator. Update class docstring accordingly
+
+In aperture.py,
+
+(*) Minor update in docstring
+
+From a3ca432 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Comment out obsolete member function applyApertureWts() of class
+AntennaArraySimulator
+
+From a06f591 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Add input keyword domain_type to member function observing_run()
+of class AntennaArraySimulator. Update member function docstring
+accordingly
+
+From 1100adf (sim-uv):
+=====================
+
+In aperture.py,
+
+(*) Add member function update() along with docstring under class
+Aperture. Update class docstring accordingly
+
+From 1b29340 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Pass parameter phase_center_dircos in call to member
+function generate_antenna_E_spectrum() inside member function
+observe() of class AntennaArraySimulator
+
+From a63200d (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Add keyword input phase_center_dircos to member function
+generate_antenna_E_spectrum() of class AntennaArraySimulator.
+Update member function docstring accordingly
+(*) Modify member function generate_antenna_E_spectrum() to
+phase reference the generated antenna voltages based on the
+input specified in phase_center_dircos
+
+From 4367c91 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Add keyword input domain_type to member function observe() of
+class AntennaArraySimulator. Update member function docstring
+accordingly. 
+(*) Add option to simulate using image plane or aperture plane
+computations in observe() member function of class
+AntennaArraySimulator
+
+From 23cc0a3 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Change returned shape of output in member function
+generate_antenna_E_spectrum() of class AntennaArraySimulator. Update
+member function docstring accordingly
+(*) Add input keyword action to specify if computed values are to be
+just store or returned. Update member function docstring accordingly
+
+From 9ad828b (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Remove commented obsolete member function applyGeometricPhase()
+of class AntennaArraySimulator
+
+From a8b1eb5 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Add member function generate_antenna_E_spectrum() along with
+docstring under class AntennaArraySimulator. Update class docstring
+accordingly
+
+In changelog_MOFF.txt,
+
+(*) Indicate the filename to which previous revisions were made
+
+From a8c9c43 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Remove input uvlocs in member function generate_sky_E_spectrum()
+of class AntennaArraySimulator. Update docstring accordingly
+(*) Modify return value in member function generate_sky_E_spectrum()
+of class AntennaArraySimulator. Update docstring accordingly
+(*) Update class docstring accordingly
+
+From dd84fac (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Add member function generate_antenna_wts_spectrum() along with
+docstring under class AntennaArraySimulator. Update class docstring
+accordingly
+
+From 6417951 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Update member function propagate_sky_E_spectrum() of class
+AntennaArraySimulator. Update docstring accordingly
+
+From d86a4d3 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Add member function propagate_sky_E_spectrum() along with
+docstring under class AntennaArraySimulator. Update class docstring
+accordingly
+
+From 6c4e4cf (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Minor change in error message in member function
+applyApertureWts() of class AntennaArraySimulator
+
+From 8ce3c69 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Debug member function applyApertureWts() of class
+AntennaArraySimulator
+
+From e77a8e3 (sim-uv):
+=====================
+
+In sim_observe.py,
+
+(*) Fix bugs in member function generate_sky_E_spectrum() of class
+AntennaArraySimulator. 
+
+From dc41c7f (versatility):
+==========================
+
+In sim_observe.py,
+
+(*) Add member function generate_sky_E_spectrum() along with docstring
+under class AntennaArraySimulator. Update class docstring accordingly
+
+From 4e38f42 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Rename function evalCorrWts2PB() with evalApertureResponse() and
+replace its occurrences throughout
+
+From c605081 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Remove member function evalPowerPatternSkypos() of class
+NewImage since it is now made redundant with the updated member
+function evalPowerPattern() of the same class. Update class
+docstring by removing description of this defunct member function
+(*) Remove commented lines from member function evalPowerPattern() of
+class NewImage
+
+From 39365ca (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Update member function evalPowerPattern() of class NewImage. It
+can compute a grid of power pattern as well as at specified locations.
+It makes use of function evalCorrWts2PB(). Update member function and
+class docstring accordingly
+(*) Update docstring of member function evalAntennaPairPBeam() of
+class AntennaArray
+
+From 618cdc3 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Rename function evalAntennaPairCorrWts2PB() to evalCrooWts2PB()
+(*) Replace all occurrences of evalAntennaPairCorrWts2PB() to
+evalCorrWts2PB()
+
+From 39ee6aa (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add function evalAntennaPairCorrWts2PB() along with docstring to
+estimate power pattern from antenna-antenna correlation weights in
+the UV-plane
+(*) Update member function evalAntennaPairCorrWts2PB() of class
+AntennaArray to call newly created function
+evalAntennaPairCorrWts2PB() to estimate power pattern. Update
+docstring of member function
+
+From 693d52a (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add member function evalAntennaPairPBeam() along with docstring
+under class AntennaArray. Update class docstring accordingly
+
+From fb1eab3 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Modify member function getStats() of class NewImage. It now uses
+masked arrays to get the appropriate statistics. Update docstring
+accordingly
+
+From 41fae99 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Create member function evalPowerPatternSkypos() along with
+docstring under class NewImage. Update class docstring accordingly
+
+From a30105f (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Fix bugs in member function removeAutoCorr() of class NewImage
+
+From 4e1bc81 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Fix bugs in member function evalPowerPattern() of class
+AntennaArray
+
+From a6c9389 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Fix bugs in member function makeCrossCorrWtsCube() of class
+AntennaArray
+
+From 6103a0d (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Fix bugs in member function evalAntennaPairCorrWts() of class
+AntennaArray
+
+From 0140e0d (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Make operations compatible with sparse matrices in member function
+makeAutoCorrCube() of class AntennaArray.
+
+From 337e1ad (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add input keyword tbinsize to member function makeAutoCorrCube()
+of class AntennaArray. Update docstring accordingly
+(*) In member function evalAutoCorr() of class NewImage pass tbinsize
+parameter while calling member function makeAutoCorrCube() of class
+AntennaArray
+(*) Fix bugs in member function avgAutoCorr() of class AntennaArray
+
+From 7d903d2 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Fix bugs in member function evalGridIllumination() of class
+Antenna
+(*) Fix bugs in member function evalAntennaPairCorrWts() of class
+AntennaArray
+
+From 30a9688 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Fix bugs in member function pairTypetags() of class AntennaArray
+
+From b92bd2e (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Modify member function removeAutoCorr() of class NewImage to
+use appropriate auto-correlation weights and data to remove from
+the images
+
+From 639eea9 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Create member function makeCrossCorrWtsCube() along with
+docstring under class AntennaArray. Update class docstring
+accordingly
+(*) Fix bugs in FFT axes in member function evalPowerPattern() of
+class NewImage
+
+From 03c076f (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Create member function evalAllAntennaPairCorrWts() along with
+docstring under class AntennaArray. Update class docstring
+accordingly
+(*) Add and initialize attribute antenna_crosswts_set in member
+function __init__() of class AntennaArray. Update class docstring
+accordingly
+
+From f76414e (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Modify evalPowerPattern() member function of class NewImage.
+Update class docstring accordingly. Comment out the earlier version
+of the same member function
+
+From 87c7d0b (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Modify evalAutoCorr() member function of class NewImage. Update
+class docstring accordingly. Comment out the earlier version of the
+same member function
+(*) Add and initialize attribute autocorr_data_vuf in __init__()
+member function of class NewImage. Update class docstring accordingly
+
+From 5a58942 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Remove usage of attributes antenna_auto_corr_wts_vuf and
+antenna_auto_corr_data_vuf in class AntennaArray. Update class
+docstring accordingly
+(*) Remove commented lines in member function makeAutoCorrCube() of
+class AntennaArray
+(*) Remove commented earlier version of member function
+evalAntennaAutoCorrWts() of class AntennaArray
+
+From 06f22b0 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) In member function makeAutoCorrCube() of class AntennaArray,
+make use of attribute pairwise_typetag_crosswts_vuf instead of
+antenna_autocorr_wts_vuf to determine autocorr_wts_cube and
+autcorr_data_cube
+
+From 71bfddd (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add input keyword forceeval to member function
+evalAntennaPairCorrWts() of class AntennaArray. Update its docstring
+accordingly
+(*) Pass keyword forceeval in member function
+evalAntennaAutoCorrWts() when calling evalAntennaPairCorrWts() of
+class AntennaArray
+
+From effb5e9 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Replace existing member function evalAntennaAutoCorrWts() of
+class AntennaArray with an updated one that internally invokes the
+member function evalAntennaPairCorrWts()
+
+From 4bb6ec1 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add member function evalAntennaPairCorrWts() along with docstring
+under class AntennaArray. Update class docstring accordingly
+(*) Update attribute antenna_pair_to_typetag in member function
+pairTypetags() of class AntennaArray
+(*) Rename attribute pairwise_antenna_crosswts_vuf to
+pairwise_typetag_crosswts_vuf in class AntennaArray. Update class
+docstring accordingly
+
+From 9e75e7d (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add and initialize attributes antenna_pair_to_typetag and
+pairwise_antenna_crosswts_vuf in __init__() member function of class
+AntennaArray. Update class docstring accordingly
+
+From 87c31fc (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Create member function pairTypetags() along with docstring
+under class AntennaArray. Update class docstring accordingly
+
+From ce9ec92 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add and initialize attribute pairwise_typetags in __init__()
+member function of class AntennaArray. Update class docstring
+accordingly
+
+From fb7a1b7 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Update __add__() member function of class AntennaArray to update
+attribute typetags with addition of each antenna instance
+(*) Update __sub__() member function of class AntennaArray to remove
+label of the removed antenna from the appropriate set under attribute
+typetags
+
+From 30ba9c1 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add and initialize attribute timetags in member function
+__init__() of class AntennaArray. Update class docstring accordingly
+
+From b6340c0 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Create member function evalGridIllumination() along with docstring
+under class Antenna. Update class docstring accordingly
+
+From d2a7bc1 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add option to update attribute typetag in member function update()
+of class Antenna. Update docstring of member function accordingly
+
+From 0557337 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add and initialize attribute typetag in __init__() member function
+of class Antenna. Update class docstring accordingly
+(*) Modify __str__() member function of class Antenna to print
+attribute typetag 
+
+From 95123a5 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Import scipy.sparse module as SpM instead of SM. Replace all
+occurrences of SM with SpM
+
+From a56c1c2 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Modify member function makeAutoCorrCube() under class
+AntennaArray to use recently created attribute auto_corr_data to
+estimate data cube from auto-correlations
+(*) Minor update in docstring of member function makeAutoCorrCube()
+of class AntennaArray
+
+From 74dc26a (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add member function evalAutoCorr() along with docstring under
+class AntennaArray. Update class docstring accordingly
+(*) Add and initialize attribute auto_corr_data in __init__()
+member function of class AntennaArray. Add its description to
+class docstring
+(*) Replace all occurrences of 'recent' with 'current' for datapool
+variable
+(*) Remove attribute auto_corr_avg and references to it from class
+AntennaArray
+
+From 53417fc (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Create member function avgAutoCorr() along with docstring under
+class AntennaArray. Update docstring of class accordingly
+(*) Add and initialize attributes tbinsize, auto_corr_avg in
+__init__() member function of class AntennaArray. Update docstring
+of class and member function accordingly
+
+From ce49978 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Create member function makeAutoCorrCube() along with docstring
+under class AntennaArray. Update class docstring accordingly
+
+From ce49978 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add and initialize attributes antenna_autocorr_wts_vuf and
+antenna_autocorr_set in __init__() member function of class
+AntennaArray. Update class docstring accordingly
+(*) Add and initialize attribute antenna_autocorr_vuf_ind in
+__init__() member function of class AntennaArray. Update class
+docstring accordingly
+(*) Add and initialize attribute antenna_autocorr_vuf_ind in
+__init__() member function of class AntennaArray. Update class
+docstring accordingly
+(*) Minor update in docstring of class get_E_fields() of class
+Antenna
+
+From cb259a5 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add and initialize attribute antenna_autocorr_set in __init__()
+member function of class AntennaArray
+(*) Add member function evalAntennaAutoCorrWts() along with docstring
+under class AntennaArray. Update docstring of class accordingly
+(*) Replace 'P1' to correct key 'P2' in member function evalAutoCorr()
+of class NewImage
+
+From ff4e134 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Add member function getStats() including docstring under class
+NewImage. Update class docstring accordingly. Need further
+development
+
+From e100ea7 (versatility):
+==========================
+
+In sim_observe.py,
+
+(*) Replace use of numpy.split() with numpy.array_split() in
+member function generate_E_spectrum() of class AntennaArraySimulator
+
+From 0c71912 (versatility):
+==========================
+
+In sim_observe.py,
+
+(*) Import progressbar and writer_module
+(*) Add progressbar in member function observing_run() of class
+AntennaArraySimulator
+
+From 60a71aa (versatility):
+==========================
+
+In sim_observe.py,
+
+(*) Update docstrings of member functions generate_E_spectrum(),
+observe() and observing_run() of class AntennaArraySimulator to
+preferably not invoke parallelization since it appears to be slower
+due to overheads
+
+From 652deaf (versatility):
+==========================
+
+In sim_observe.py,
+
+(*) Fix bug in splitting array in case of parallel processing in
+member function generate_E_spectrum() of class AntennaArraySimulator
+(*) Fix bug in assigning attribute Ef_info in member function
+generate_E_spectrum() of class AntennaArraySimulator
+
+From 613a8bc (versatility):
+==========================
+
+In sim_observe.py,
+
+(*) Roll axis on voltage patterns determined in parallel processing to
+get the right dimensions in member function generate_voltage_pattern()
+of class AntennaArraySimulator
+
+in antenna_beams.py,
+
+(*) Add function antenna_beam_arg_splitter() which is a wrapper for
+function antenna_beam_generator() and will be used in cases of
+parallel processing
+
+From ee6ab99 (versatility):
+==========================
+
+In sim_observe.py,
+
+(*) Add input randvals in function generate_E_spectrum() to accept
+externally generated random numbers that will be used in generating
+electric fields. Update docstring accordingly
+(*) Add input randomseed in function generate_E_spectrum() to accept
+a user-defined seed for random number generator. This will be used if
+the other input randvals is set to None. Update docstring accordingly
+(*) Add input randomseed in member function generate_E_spectrum() of
+class AntennaArraySimulator. Update docstring accordingly
+(*) Modify member function generate_E_spectrum() of
+class AntennaArraySimulator to generate random values and pass them
+to function generate_E_spectrum() as externally generated random
+normal values through the input randvals. This ensures the same
+random values are generated whether parallelization is invoked or not
+member function generate_E_spectrum() of class AntennaArraySimulator
+(*) Add input randomseed in member function observe() of class
+AntennaArraySimulator. Update docstring accordingly
+(*) Modify member function observe() of class AntennaArraySimulator
+to pass randomseed parameter to member function generate_E_spectrum()
+of the same class
+(*) Add input randomseed in member function observing_run() of class
+AntennaArraySimulator. Update docstring accordingly
+(*) Modify member function observing_run() of class 
+AntennaArraySimulator to pass randomseed parameter to member function
+observe() of the same class
+
+From 42e8f57 (versatility):
+==========================
+
+In sim_observe.py,
+
+(*) Fix bug in generate_E_spectrum() member function of class
+AntennaArraySimulator in producing random electric fields where the
+randomization is to be over only frequency and the sky objects but
+not over antennas. Antennas differ only by their geometric phases and
+voltage patterns
+
+From f0043b1 (versatility):
+==========================
+
+In antenna_array.py,
+
+(*) Minor bug fix in initializing attribute f0 in __init__() member
+function of class AntennaArray when input parameter antenna_array is
+provided
+
+In sim_observe.py,
+
+(*) Minor bug fix in initializing attribute f in __init__() member
+function of class AntennaArraySimulator by taking every second sample
+in the frequency vector
+
+From 22f8c54 (versatility):
+==========================
+
+In sim_observe.py,
+
+(*) Minor bug fix in member function generate_E_timeseries() of class
+AntennaArraySimulator.
+
+From 0a663d5 (versatility):
+==========================
+
+In sim_observe.py,
+
+(*) Bug fix in determining antenna keys in member function
+generate_E_spectrum() when attribute identical_antennas is set to
+False in member function AntennaArraySimulator
+
+From 3a7daa0 (master):
+=====================
+
+(*) Adjust import of modules from astroutils package (previously
+general package) in sim_observe.py, antenna_array.py, aperture.py,
+antenna_beams.py, antenna_array_for_profiler.py
+
+From da19ecc (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Minor modifications in docstrings in class AntennaArraySimulator
+
+From 0304ba7 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Save sky model in save() member function of class
+AntennaArraySimulator
+
+From c064e82 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Import package h5py for handling data in HDF5 format
+(*) Add member function save() along with docstring under class
+AntennaArraySimulator to save data to an external file in HDF5 format.
+Update docstring of class AntennaArraySimulator accordingly
+(*) Add, initialize attribute Et_stack in __init__() member function
+of class AntennaArraySimulator. Update description in class docstring
+accordingly
+(*) Add, initialize attribute obsmode in __init__() member function
+of class AntennaArraySimulator. Update description in class docstring
+accordingly
+(*) Add keyword input obsmode in member function observe() of class
+AntennaArraySimulator. Update docstring accordingly
+(*) Update attribute obsmode in member functions observing_run() and
+observe() of class AntennaArraySimulator
+
+From b3ccac1 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add attributes timestamp and timestamps to class
+AntennaArraySimulator and initialize them in __init__() member
+function. Update class and member function docstrings accordingly.
+(*) Update attributes timestamp and timestamps in member function
+observe() of class AntennaArraySimulator.
+(*) Fix timing bug in member function observing_run() of class
+AntennaArraySimulator
+
+From a8d4a55 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Fix bug due to dimensional compatibility checking in member
+function stack_E_spectrum() of class AntennaArraySimulator
+
+From d198c69 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add keyword input stack to member function observe() of class
+AntennaArraySimulator. Update docstring of member function
+accordingly
+(*) Update docstring of class AntennaArraySimulator with description
+of member function observing_run()
+
+From 55963e4 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add member function observing_run() along with docstring under
+class AntennaArraySimulator. Update docstring of class accordingly
+(*) In member funciton observe() of class ANtennaArraySimulator,
+handle the case properly when there are no objects in the sky model
+visibile in the upper hemisphere
+(*) Update docstring describing correctly the output of member 
+function generate_E_spectrum() of class AntennaArraySimulator
+(*) Minor changes in observe() member function of class
+AntennaArraySimulator to keep the shapes correct for phase_center
+and pointing_center
+
+From 3e89059 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add default to input Ef_info in member function stack_E_spectrum()
+of class AntennaArraySimulator. Modify body and docstring of member
+function accordingly
+
+From 94ec489 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add member function observe() of class AntennaArraySimulator
+along with docstring. Update docstring of class AntennaArraySimulator
+accordingly
+(*) In member functions generate_voltage_pattern(),
+load_voltage_pattern(), and generate_E_spectrum() of class
+AntennaArraySimulator, sort by antenna keys for processing
+(*) Fix bugs in member function generate_E_spectrum() of class
+AntennaArraySimulator
+(*) Fix bug in global function generate_E_spectrum()
+
+From 439b229 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Make member function load_voltage_pattern() of class
+AntennaArraySimulator handle polarization. Update docstring
+accordingly
+
+From ef828f0 (catalog-sim):
+==========================
+
+In antenna_beams.py,
+
+(*) Rename primary_beam_generator() to antenna_beam_generator()
+
+In sim_observe.py,
+
+(*) Change all calls from primary_beam_generator() to
+antenna_beam_generator()
+
+From 257b7b0 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Compute antenna beams under both polarizations in member function
+generate_voltage_pattern() under class AntennaArraySimulator. Update
+docstring accordingly
+(*) Add input keyword pointing_ceter in member function
+generate_voltage_pattern() under class AntennaArraySimulator. Update
+docstring accordingly
+
+In antenna_beams.py,
+
+(*) Include uniform_rectangular_aperture() and
+uniform_square_aperture() computations inside wrapper
+primary_beam_generator(). Update docstring accordingly
+
+
+From e781fef (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Change iteritems() to itervalues() in member function
+generate_voltage_pattern() of class AntennaArraySimulator.
+(*) Comment setting telescope id in member function
+generate_voltage_pattern() of class AntennaArraySimulator
+
+From cc866f0 (catalog-sim):
+==========================
+
+In antenna_beams.py,
+
+(*) Compute and return power pattern if input keyword power is set
+in function array_field_pattern()
+(*) Minor changes to docstrings throughout
+
+From a069e86 (catalog-sim):
+==========================
+
+In antenna_beams.py,
+
+(*) Add input keyword power to functions to return power patterns.
+Update docstring accordingly
+
+From 432dace (catalog-sim):
+==========================
+
+In antenna_beams.py,
+
+(*) Change sign of relative rotation by amount east2ax1 in functions
+isotropic_radiators_array_field_pattern() and
+uniform_rectangular_aperture(). This is because azimuths are measured
+clockwise from North while east2ax1 is measured anti-clockwise from
+East
+
+From 1d870d3 (catalog-sim):
+==========================
+
+In antenna_beams.py,
+
+(*) Add function uniform_square_aperture() with docstring
+(*) Minor changes in docstrings
+
+From bc8df96 (catalog-sim):
+==========================
+
+In antenna_beams.py,
+
+(*) Add function uniform_rectangular_aperture() with docstring
+
+from 67a27c1 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Remove input argument telescopes to member function
+generate_voltage_pattern() of class AntennaArraySimulator. Construct
+telescope information internally. Update docstrong accordingly
+
+In antenna_beams.py,
+
+(*) Remove usage of nrand in primary_beam_generator(). Update
+docstring accordingly
+
+From 8019158 (catalog-sim):
+==========================
+
+(*) Add antenna_beams.py to git repo
+
+From 22b031a (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add member function generate_voltage_pattern() along with
+docstring under class AntennaArraySimulator. Update class docstring
+accordingly
+
+From ca708fd (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add memner function generate_E_timeseries() along with docstring
+under class AntennaArraySimulator. Update class docstring accordingly
+(*) Add and initialize attribute t in __init__() member function of
+class AntennaArraySimulator. Update docstring accordingly
+
+From 9449a8e (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add attribute Ef_info and initialize in __init__() member function
+of class AntennaArraySimulator. Update docstrings accordingly
+(*) Add input keyword action in member function stack_E_spectrum() of
+class AntennaArraySimulator. Update docstring accordingly
+
+From bc1fe11 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add and initialize attribute Ef_info in __init__() member function
+of class AntennaArraySimulator. Update docstring accordingly
+(*) Add member function stack_E_spectrum() along with docstring under
+class AntennaArraySimulator to stack E-field spectra along time axis.
+(*) Update docstring of class AntennaArraySimulator for these changes
+
+From 6f3373f (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Create function generate_E_spectrum() to generate E-field
+spectra using individual antenna patterns. Docstring added.
+(*) Create function generate_E_spectrum_arg_splitter() to wrap the
+function generate_E_spectrum() for unwrapping the arguments and
+perform parallel processing
+(*) Create member function generate_E_spectrum() along with docstring
+under class AntennaArraySimulator that is capable of invoking parallel
+processes for simulating E-fields observed by the antenna array.
+Update docstring of class AntennaArraySimulator accordingly
+
+From 85277b5 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Replace input altaz with theta_phi in interp_beam(). Update
+docstring accordingly
+(*) Add input altaz in member function find_voltage_pattern() of
+class AntennaArraySimulator. Update docstring accordingly
+
+From 0ce59e0 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add function stochastic_E_timeseries_arg_splitter() which is a
+wrapper for stochastic_E_timeseries() in case of parallel processing
+
+From 1144139 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add function interp_beam() to interpolate antenna pattern at
+given locations and frequencies. Add docstring
+(*) Add function interp_beam_arg_splitter() which is a wrapper for
+interp_beam() in case of parallel processing
+
+From fe8e58d (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add member function find_voltage_pattern() with docstring under
+class AntennaArraySimulator. Update docstring of class accordingly.
+
+From bf1f0c2 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Add member function upper_hemisphere() with docstring under
+class AntennaArraySimulator. Update docstring of class accordingly.
+(*) Add attributes latitude and longitude in __init__() member
+function of class AntennaArraySimulator. Update docstrings of
+__init__() member function and class AntennaArraySimulator
+
+In antenna_array.py,
+
+(*) Add attribute longitude in class Antenna and initialize in
+__init__() member function. Update docstrings accordingly
+(*) Add attributes latitude and longitude in class AntennaArray
+and initialize in __init__() member function. Update docstrings
+accordingly
+(*) Update attributes latitude and longitude in member function
+__add__() of class AntennaArray
+
+From aa2ed14 (catalog-sim):
+==========================
+
+In sim_observe.py,
+
+(*) Create class AntennaArraySimulator with docstring
+(*) Create __init__() member function along with docstring under
+class AntennaArraySimulator
+
+In antenna_array.py,
+
+(*) Trivial edit of typo in docstring
+
+From ef2f2bb (ant-beams-in-sim):
+===============================
+
+In sim_observe.py,
+
+(*) Add keyword voltage_pattern in monochromatic_E_timeseries() and
+update docstring. Modify monochromatic_E_timeseries() to now
+simulate E-fields using voltage pattern that is specified for every
+antenna at every sky location for the given frequency channel.
+
+From 19a37e7 (ant-beams-in-sim):
+===============================
+
+In sim_observe.py,
+
+(*) Add keyword input voltage_pattern in monochromatic_E_spectrum()
+and update docstring accordingly. Modify monochromatic_E_spectrum()
+to now simulate E-fields using voltage pattern that is specified for 
+every antenna at every sky location for the given frequency channel.
+
+From dcac707 (ant-beams-in-sim):
+===============================
+
+In sim_observe.py,
+
+(*) Add keyword voltage_pattern in stochastic_E_timeseries() and
+update docstring. Modify stochastic_E_timeseries() to now
+simulate E-fields using voltage pattern that is specified for every
+antenna at every sky location for all frequency channels.
+
+From 4e5d4d3 (master):
+=====================
+
+In sim_observe.py,
+
+(*) Add keyword input voltage_pattern in stochastic_E_spectrum() and
+update docstring accordingly. Modify stochastic_E_spectrum() to now
+simulate E-fields using voltage pattern that is specified for every
+antenna at every sky location for all frequency channels.
+
 From 2884441 (Adam-master), cc0bbb2 (Adam origin master):
 ========================================================
 

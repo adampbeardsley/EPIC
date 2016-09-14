@@ -1,17 +1,18 @@
 import numpy as NP
+import numpy.ma as MA
 import multiprocessing as MP
 import itertools as IT
 import copy
 import scipy.constants as FCNST
-import scipy.sparse as SM
+import scipy.sparse as SpM
 from astropy.io import fits
 import matplotlib.pyplot as PLT
 import progressbar as PGB
-import my_DSP_modules as DSP
-import geometry as GEOM
-import my_gridding_modules as GRD
-import my_operations as OPS
-import lookup_operations as LKP
+from astroutils import DSP_modules as DSP
+from astroutils import geometry as GEOM
+from astroutils import gridding_modules as GRD
+from astroutils import mathops as OPS
+from astroutils import lookup_operations as LKP
 import aperture as APR
 
 ################### Routines essential for parallel processing ################
@@ -110,7 +111,144 @@ def genMatrixMapper(val, ind, shape):
         for i in range(len(ind)-1):
             if ind[i+1].size != ind[i].size:
                 raise ValueError('All index groups must have same size')
-    return SM.csr_matrix((val, ind), shape=shape)
+    return SpM.csr_matrix((val, ind), shape=shape)
+
+################################################################################
+
+def evalApertureResponse(wts_grid, ulocs, vlocs, pad=0, skypos=None):
+
+    """
+    --------------------------------------------------------------------------
+    Evaluate response on sky from aperture weights on the UV-plane. It applies
+    to both single antennas and antenna pairs
+    
+    Inputs:
+
+    wts_grid    [numpy array or scipy sparse matrix] Complex weights on 
+                the aperture-plane and along frequency axis. It can be a numpy 
+                array of size nv x nu x nchan or a scipy sparse matrix of
+                size (nv x nu) x nchan. 
+
+    ulocs       [numpy array] u-locations on grid. It is of size nu and must
+                match the dimension in wts_grid
+
+    vlocs       [numpy array] v-locations on grid. It is of size nv and must
+                match the dimension in wts_grid
+
+    pad         [integer] indicates the amount of padding before estimating
+                power pattern. Applicable only when skypos is set to None. 
+                The output power pattern will be of size 2**pad-1 times the 
+                size of the UV-grid along l- and m-axes. Value must 
+                not be negative. Default=0 (implies no padding). pad=1 
+                implies padding by factor 2 along u- and v-axes
+
+    skypos      [numpy array] Positions on sky at which power pattern is 
+                to be esimated. It is a 2- or 3-column numpy array in 
+                direction cosine coordinates. It must be of size nsrc x 2 
+                or nsrc x 3. If set to None (default), the power pattern is 
+                estimated over a grid on the sky. If a numpy array is
+                specified, then power pattern at the given locations is 
+                estimated.
+
+    Outputs:
+    pbinfo is a dictionary with the following keys and values:
+    'pb'    [numpy array] If skypos was set to None, the numpy array is 
+            3D masked array of size nm x nl x nchan. The mask is based on 
+            which parts of the grid are valid direction cosine coordinates 
+            on the sky. If skypos was a numpy array denoting specific sky 
+            locations, the value in this key is a 2D numpy array of size 
+            nsrc x nchan
+    'llocs' [None or numpy array] If the power pattern estimated is a grid
+            (if input skypos was set to None), it contains the l-locations
+            of the grid on the sky. If input skypos was not set to None, 
+            the value under this key is set to None
+    'mlocs' [None or numpy array] If the power pattern estimated is a grid
+            (if input skypos was set to None), it contains the m-locations
+            of the grid on the sky. If input skypos was not set to None, 
+            the value under this key is set to None
+    ------------------------------------------------------------------------
+    """
+
+    try:
+        wts_grid, ulocs, vlocs
+    except NameError:
+        raise NameError('Inputs wts_grid, ulocs and vlocs must be specified')
+
+    if skypos is not None:
+        if not isinstance(skypos, NP.ndarray):
+            raise TypeError('Input skypos must be a numpy array')
+        if skypos.ndim != 2:
+            raise ValueError('Input skypos must be a 2D numpy array')
+
+        if (skypos.shape[1] < 2) or (skypos.shape[1] > 3):
+            raise ValueError('Input skypos must be a 2- or 3-column array')
+
+        skypos = skypos[:,:2]
+        if NP.any(NP.sum(skypos**2, axis=1) > 1.0):
+            raise ValueError('Magnitude of skypos direction cosine must not exceed unity')
+
+    if not isinstance(ulocs, NP.ndarray):
+        raise TypeError('Input ulocs must be a numpy array')
+
+    if not isinstance(vlocs, NP.ndarray):
+        raise TypeError('Input vlocs must be a numpy array')
+
+    if not isinstance(pad, int):
+        raise TypeError('Input must be an integer')
+    if pad < 0:
+        raise ValueError('Input pad must be non-negative')
+
+    ulocs = ulocs.ravel()
+    vlocs = vlocs.ravel()
+    
+    wts_shape = wts_grid.shape
+    if wts_shape[0] != ulocs.size * vlocs.size:
+        raise ValueError('Shape of input wts_grid incompatible with that of ulocs and vlocs')
+    
+    if SpM.issparse(wts_grid):
+        sum_wts = wts_grid.sum(axis=0).A # 1 x nchan
+        sum_wts = sum_wts[NP.newaxis,:,:] # 1 x 1 x nchan
+    else:
+        sum_wts = NP.sum(wts_grid, axis=(0,1), keepdims=True) # 1 x 1 x nchan
+        
+    llocs = None
+    mlocs = None
+    if skypos is None:
+        if SpM.issparse(wts_grid):
+            shape_tuple = (vlocs.size, ulocs.size) + (wts_grid.shape[1],)
+            wts_grid = wts_grid.toarray().reshape(shape_tuple)
+        padded_wts_grid = NP.pad(wts_grid, (((2**pad-1)*vlocs.size/2,(2**pad-1)*vlocs.size/2),((2**pad-1)*ulocs.size/2,(2**pad-1)*ulocs.size/2),(0,0)), mode='constant', constant_values=0)
+        padded_wts_grid = NP.fft.ifftshift(padded_wts_grid, axes=(0,1))
+        wts_lmf = NP.fft.fft2(padded_wts_grid, axes=(0,1)) / sum_wts
+        pb = NP.fft.fftshift(wts_lmf, axes=(0,1))
+        llocs = NP.fft.fftshift(NP.fft.fftfreq(2**pad * ulocs.size, ulocs[1]-ulocs[0]))
+        mlocs = NP.fft.fftshift(NP.fft.fftfreq(2**pad * vlocs.size, vlocs[1]-vlocs[0]))
+        lmgrid_invalid = llocs.reshape(1,-1)**2 + mlocs.reshape(-1,1)**2 > 1.0
+        lmgrid_invalid = lmgrid_invalid[:,:,NP.newaxis] * NP.ones(pb.shape[2], dtype=NP.bool).reshape(1,1,-1)
+        pb = MA.array(pb, mask=lmgrid_invalid)
+    else:
+        gridu, gridv = NP.meshgrid(ulocs, vlocs)
+        griduv = NP.hstack((gridu.reshape(-1,1),gridv.reshape(-1,1)))
+        if SpM.issparse(wts_grid):
+            uvind = SpM.find(wts_grid)[0]
+        else:
+            eps = 1e-10
+            wts_grid = wts_grid.reshape(griduv.shape[0],-1)
+            uvind, freqind = NP.where(NP.abs(wts_grid) > eps)
+            wts_grid = SpM.csr_matrix((wts_grid[(uvind, freqind)], (uvind, freqind)), shape=(gridu.size,wts_grid.shape[1]), dtype=NP.complex64)
+            
+        uniq_uvind = NP.unique(uvind)
+        matFT = NP.exp(-1j*2*NP.pi*NP.dot(skypos, griduv[uniq_uvind,:].T))
+        uvmeshind, srcmeshind = NP.meshgrid(uniq_uvind, NP.arange(skypos.shape[0]))
+        uvmeshind = uvmeshind.ravel()
+        srcmeshind = srcmeshind.ravel()
+        spFTmat = SpM.csr_matrix((matFT.ravel(), (srcmeshind, uvmeshind)), shape=(skypos.shape[0],griduv.shape[0]), dtype=NP.complex64)
+        sum_wts = wts_grid.sum(axis=0).A
+        pb = spFTmat.dot(wts_grid) / sum_wts
+        pb = pb.A
+    pb = pb.real
+    pbinfo = {'pb': pb, 'llocs': llocs, 'mlocs': mlocs}
+    return pbinfo
 
 ################################################################################
 
@@ -4489,11 +4627,11 @@ class InterferometerArray:
                             nproc = min(nproc, max(MP.cpu_count()-1, 1))
                         pool = MP.Pool(processes=nproc)
                         list_of_spmat = pool.map(genMatrixMapper_arg_splitter, IT.izip(list_of_val, list_of_rowcol_tuple, list_of_shapes))
-                        self.bl2grid_mapper[cpol] = SM.hstack(list_of_spmat, format='csr')
+                        self.bl2grid_mapper[cpol] = SpM.hstack(list_of_spmat, format='csr')
                     else:
                         spval = NP.asarray(spval)
                         sprowcol = (NP.asarray(sprow), NP.asarray(spcol))
-                        self.bl2grid_mapper[cpol] = SM.csr_matrix((spval, sprowcol), shape=(self.gridu.size*self.f.size, n_bl*self.f.size))
+                        self.bl2grid_mapper[cpol] = SpM.csr_matrix((spval, sprowcol), shape=(self.gridu.size*self.f.size, n_bl*self.f.size))
                     
                     self.grid_mapper[cpol]['all_bl2grid']['per_bl_per_freq_norm_wts'] = NP.copy(per_bl_per_freq_norm_wts)
 
@@ -4549,8 +4687,8 @@ class InterferometerArray:
             Vf = Vf.ravel()
             wts = wts.ravel()
 
-            sparse_Vf = SM.csr_matrix(Vf)
-            sparse_wts = SM.csr_matrix(wts)
+            sparse_Vf = SpM.csr_matrix(Vf)
+            sparse_wts = SpM.csr_matrix(wts)
 
             # Store as sparse matrices
             self.grid_illumination[cpol] = self.bl2grid_mapper[cpol].dot(sparse_wts.T)
@@ -6255,6 +6393,16 @@ class NewImage:
                  
     f0:          [Scalar] Positive value for the center frequency in Hz.
 
+    autocorr_wts_vuf
+                 [dictionary] dictionary with polarization keys 'P1' and 'P2. 
+                 Under each key is a matrix of size nt x nv x nu x nchan
+
+    autocorr_data_vuf 
+                 [dictionary] dictionary with polarization keys 'P1' and 'P2. 
+                 Under each key is a matrix of size nt x nv x nu x nchan 
+                 where nt=1, nt=n_timestamps, or nt=n_tavg if datapool is set 
+                 to 'current', 'stack' or 'avg' respectively
+
     gridx_P1     [Numpy array] x-locations of the grid lattice for P1 
                  polarization
 
@@ -6341,6 +6489,16 @@ class NewImage:
                  appropriate electric field quantities associated with the 
                  antenna array.
 
+    evalAutoCorr()
+                 Evaluate sum of auto-correlations of all antenna weights on 
+                 the UV-plane. 
+
+    evalPowerPattern()
+                 Evaluate power pattern for the antenna from its zero-centered 
+                 cross-correlated footprint
+
+    getStats()   Get statistics from images from inside specified boxes
+
     save()       Saves the image information to disk
 
     Read the member function docstrings for more details
@@ -6364,7 +6522,8 @@ class NewImage:
         timestamp, f, f0, gridx_P1, gridy_P1, grid_illumination_P1, grid_Ef_P1, 
         holograph_P1, holograph_PB_P1, img_P1, PB_P1, lf_P1, mf_P1, gridx_P1,
         gridy_P1, grid_illumination_P1, grid_Ef_P1, holograph_P1,
-        holograph_PB_P1, img_P1, PB_P1, lf_P1, and mf_P1
+        holograph_PB_P1, img_P1, PB_P1, lf_P1, mf_P1, autocorr_wts_vuf, 
+        autocorr_data_vuf
 
         Read docstring of class Image for details on these attributes.
         ------------------------------------------------------------------------
@@ -6546,6 +6705,7 @@ class NewImage:
         self.vis_vuf = {}
         self.twts = {}
         self.autocorr_wts_vuf = {}
+        self.autocorr_data_vuf = {}
         self.nzsp_grid_vis_avg = {}
         self.nzsp_grid_illumination_avg = {}
         self.nzsp_wts_vuf = {}
@@ -6599,6 +6759,7 @@ class NewImage:
                     self.wts_vuf[apol] = None
                     self.vis_vuf[apol] = None
                     self.autocorr_wts_vuf[apol] = None
+                    self.autocorr_data_vuf[apol] = None
                     self.nzsp_grid_vis_avg[apol] = None
                     self.nzsp_grid_illumination_avg[apol] = None
                     self.nzsp_wts_vuf[apol] = None
@@ -6893,7 +7054,7 @@ class NewImage:
 
                     self.grid_wts[apol] = NP.zeros(self.gridu.shape+(self.f.size,))
                     if apol in self.antenna_array.grid_illumination:
-                        if SM.issparse(self.antenna_array.grid_illumination[apol]):
+                        if SpM.issparse(self.antenna_array.grid_illumination[apol]):
                             self.grid_illumination[apol] = self.antenna_array.grid_illumination[apol].A.reshape(self.gridu.shape+(self.f.size,))
                             self.grid_Ef[apol] = self.antenna_array.grid_Ef[apol].A.reshape(self.gridu.shape+(self.f.size,))
                         else:
@@ -6950,7 +7111,7 @@ class NewImage:
 
                     self.grid_wts[cpol] = NP.zeros(self.gridu.shape+(self.f.size,))
                     if cpol in self.interferometer_array.grid_illumination:
-                        if SM.issparse(self.interferometer_array.grid_illumination[cpol]):
+                        if SpM.issparse(self.interferometer_array.grid_illumination[cpol]):
                             self.grid_illumination[cpol] = self.interferometer_array.grid_illumination[cpol].A.reshape(self.gridu.shape+(self.f.size,))
                             self.grid_Vf[cpol] = self.interferometer_array.grid_Vf[cpol].A.reshape(self.gridu.shape+(self.f.size,))
                         else:
@@ -7198,25 +7359,118 @@ class NewImage:
 
     ############################################################################
 
-    def evalAutoCorr(self, lkpinfo=None, forceeval=False):
+    # def evalAutoCorr(self, lkpinfo=None, forceeval=False):
+
+    #     """
+    #     ------------------------------------------------------------------------
+    #     Evaluate auto-correlation of single antenna weights with itself on the
+    #     UV-plane. 
+
+    #     Inputs:
+
+    #     lkpinfo   [dictionary] consists of weights information for each of 
+    #               the polarizations under polarization keys. Each of 
+    #               the values under the keys is a string containing the full
+    #               path to a filename that contains the positions and 
+    #               weights for the aperture illumination in the form of 
+    #               a lookup table as columns (x-loc [float], y-loc 
+    #               [float], wts[real], wts[imag if any]). In this case, the 
+    #               lookup is for auto-corrlation of antenna weights. It only 
+    #               applies when the antenna aperture class is set to 
+    #               lookup-based kernel estimation instead of a functional form
+
+    #     forceeval [boolean] When set to False (default) the auto-correlation in
+    #               the UV plane is not evaluated if it was already evaluated 
+    #               earlier. If set to True, it will be forcibly evaluated 
+    #               independent of whether they were already evaluated or not
+    #     ------------------------------------------------------------------------
+    #     """
+
+    #     if forceeval or (not self.autocorr_set):
+    #         if self.measured_type == 'E-field':
+    
+    #             pol = ['P1', 'P2']
+    
+    #             # Assume all antenna apertures are identical and make a copy of the
+    #             # antenna aperture
+    #             # Need serious development for non-identical apertures
+    
+    #             ant_aprtr = copy.deepcopy(self.antenna_array.antennas.itervalues().next().aperture)
+    #             pol_type = 'dual'
+    #             kerntype = ant_aprtr.kernel_type
+    #             shape = ant_aprtr.shape
+    #             # kernshapeparms = {'xmax': {p: ant_aprtr.xmax[p] for p in pol}, 'ymax': {p: ant_aprtr.ymax[p] for p in pol}, 'rmin': {p: ant_aprtr.rmin[p] for p in pol}, 'rmax': {p: ant_aprtr.rmax[p] for p in pol}, 'rotangle': {p: ant_aprtr.rotangle[p] for p in pol}}
+    #             kernshapeparms = {p: {'xmax': ant_aprtr.xmax[p], 'ymax': ant_aprtr.ymax[p], 'rmax': ant_aprtr.rmax[p], 'rmin': ant_aprtr.rmin[p], 'rotangle': ant_aprtr.rotangle[p]} for p in pol}
+    
+    #             for p in pol:
+    #                 if kerntype[p] == 'func':
+    #                     if shape[p] == 'rect':
+    #                         shape[p] = 'auto_convolved_rect'
+    #                     elif shape[p] == 'square':
+    #                         shape[p] = 'auto_convolved_square'
+    #                     elif shape[p] == 'circular':
+    #                         shape[p] = 'auto_convolved_circular'
+    #                     else:
+    #                         raise ValueError('Aperture kernel footprint shape - {0} - currently unsupported'.format(shape[p]))
+                        
+    #             aprtr = APR.Aperture(pol_type=pol_type, kernel_type=kerntype,
+    #                                  shape=shape, parms=kernshapeparms,
+    #                                  lkpinfo=lkpinfo, load_lookup=True)
+                
+    #             du = self.gridu[0,1] - self.gridu[0,0]
+    #             dv = self.gridv[1,0] - self.gridv[0,0]
+    #             if self.measured_type == 'E-field':
+    #                 gridu, gridv = NP.meshgrid(du*(NP.arange(2*self.gridu.shape[1])-self.gridu.shape[1]), dv*(NP.arange(2*self.gridu.shape[0])-self.gridu.shape[0]))
+    #             else:
+    #                 gridu, gridv = self.gridu, self.gridv
+    
+    #             wavelength = FCNST.c / self.f
+    #             min_lambda = NP.abs(wavelength).min()
+    #             rmaxNN = 0.5 * NP.sqrt(du**2 + dv**2) * min_lambda 
+    
+    #             gridx = gridu[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
+    #             gridy = gridv[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
+    #             gridxy = NP.hstack((gridx.reshape(-1,1), gridy.reshape(-1,1)))
+    #             wl = NP.ones(gridu.shape)[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
+    #             wl = wl.reshape(-1)
+    #             distNN = 2.0 * max([NP.sqrt(aprtr.xmax['P1']**2 + NP.sqrt(aprtr.ymax['P1']**2)), NP.sqrt(aprtr.xmax['P2']**2 + NP.sqrt(aprtr.ymax['P2']**2)), aprtr.rmax['P1'], aprtr.rmax['P2']]) # factor in the front is to safely estimate kernel around some extra grid pixels
+    #             indNN_list, blind, vuf_gridind = LKP.find_NN(NP.zeros((1,2)), gridxy, distance_ULIM=distNN, flatten=True, parallel=False)
+    #             dxy = gridxy[vuf_gridind,:]
+    #             unraveled_vuf_ind = NP.unravel_index(vuf_gridind, gridu.shape+(self.f.size,))
+    
+    #             self.autocorr_wts_vuf = {p: NP.zeros(gridu.shape+(self.f.size,), dtype=NP.complex64) for p in pol}
+    #             # self.pbeam = {p: NP.zeros((2*gridv.shape[0],2*gridu.shape[1],self.f.size), dtype=NP.complex64) for p in pol}                
+    #             for p in pol:
+    #                 krn = aprtr.compute(dxy, wavelength=wl[vuf_gridind], pol=p, rmaxNN=rmaxNN, load_lookup=False)
+    #                 self.autocorr_wts_vuf[p][unraveled_vuf_ind] = krn[p]
+    #                 self.autocorr_wts_vuf[p] = self.autocorr_wts_vuf[p] / NP.sum(self.autocorr_wts_vuf[p], axis=(0,1), keepdims=True)
+    #                 # sum_wts = NP.sum(self.autocorr_wts_vuf[p], axis=(0,1), keepdims=True)
+    #                 # padded_wts_vuf = NP.pad(self.autocorr_wts_vuf[p], ((self.gridv.shape[0],self.gridv.shape[0]),(self.gridu.shape[1],self.gridu.shape[1]),(0,0)), mode='constant', constant_values=0)
+    #                 # padded_wts_vuf = NP.fft.ifftshift(padded_wts_vuf, axes=(0,1))
+    #                 # wts_lmf = NP.fft.fft2(padded_wts_vuf, axes=(0,1)) / sum_wts
+    #                 # if NP.abs(wts_lmf.imag).max() < 1e-10:
+    #                 #     self.pbeam[p] = NP.fft.fftshift(wts_lmf.real, axes=(0,1))
+    #                 # else:
+    #                 #     raise ValueError('Significant imaginary component found in the power pattern')
+                    
+    #             self.autocorr_set = True
+
+    ############################################################################
+
+    def evalAutoCorr(self, datapool='avg', forceeval=False):
 
         """
         ------------------------------------------------------------------------
-        Evaluate auto-correlation of single antenna weights with itself on the
+        Evaluate sum of auto-correlations of all antenna weights on the
         UV-plane. 
 
         Inputs:
 
-        lkpinfo   [dictionary] consists of weights information for each of 
-                  the polarizations under polarization keys. Each of 
-                  the values under the keys is a string containing the full
-                  path to a filename that contains the positions and 
-                  weights for the aperture illumination in the form of 
-                  a lookup table as columns (x-loc [float], y-loc 
-                  [float], wts[real], wts[imag if any]). In this case, the 
-                  lookup is for auto-corrlation of antenna weights. It only 
-                  applies when the antenna aperture class is set to 
-                  lookup-based kernel estimation instead of a functional form
+        datapool  [string] Specifies whether data to be used in determining the
+                  auto-correlation the E-fields to be used come from
+                  'stack', 'current', or 'avg' (default). Squared electric 
+                  fields will be used if set to 'current' or 'stack', and 
+                  averaged squared electric fields if set to 'avg'
 
         forceeval [boolean] When set to False (default) the auto-correlation in
                   the UV plane is not evaluated if it was already evaluated 
@@ -7226,117 +7480,87 @@ class NewImage:
         """
 
         if forceeval or (not self.autocorr_set):
-            if self.measured_type == 'E-field':
-    
-                pol = ['P1', 'P2']
-    
-                # Assume all antenna apertures are identical and make a copy of the
-                # antenna aperture
-                # Need serious development for non-identical apertures
-    
-                ant_aprtr = copy.deepcopy(self.antenna_array.antennas.itervalues().next().aperture)
-                pol_type = 'dual'
-                kerntype = ant_aprtr.kernel_type
-                shape = ant_aprtr.shape
-                # kernshapeparms = {'xmax': {p: ant_aprtr.xmax[p] for p in pol}, 'ymax': {p: ant_aprtr.ymax[p] for p in pol}, 'rmin': {p: ant_aprtr.rmin[p] for p in pol}, 'rmax': {p: ant_aprtr.rmax[p] for p in pol}, 'rotangle': {p: ant_aprtr.rotangle[p] for p in pol}}
-                kernshapeparms = {p: {'xmax': ant_aprtr.xmax[p], 'ymax': ant_aprtr.ymax[p], 'rmax': ant_aprtr.rmax[p], 'rmin': ant_aprtr.rmin[p], 'rotangle': ant_aprtr.rotangle[p]} for p in pol}
-    
-                for p in pol:
-                    if kerntype[p] == 'func':
-                        if shape[p] == 'rect':
-                            shape[p] = 'auto_convolved_rect'
-                        elif shape[p] == 'square':
-                            shape[p] = 'auto_convolved_square'
-                        elif shape[p] == 'circular':
-                            shape[p] = 'auto_convolved_circular'
-                        else:
-                            raise ValueError('Aperture kernel footprint shape - {0} - currently unsupported'.format(shape[p]))
-                        
-                aprtr = APR.Aperture(pol_type=pol_type, kernel_type=kerntype,
-                                     shape=shape, parms=kernshapeparms,
-                                     lkpinfo=lkpinfo, load_lookup=True)
-                
-                du = self.gridu[0,1] - self.gridu[0,0]
-                dv = self.gridv[1,0] - self.gridv[0,0]
-                if self.measured_type == 'E-field':
-                    gridu, gridv = NP.meshgrid(du*(NP.arange(2*self.gridu.shape[1])-self.gridu.shape[1]), dv*(NP.arange(2*self.gridu.shape[0])-self.gridu.shape[0]))
-                else:
-                    gridu, gridv = self.gridu, self.gridv
-    
-                wavelength = FCNST.c / self.f
-                min_lambda = NP.abs(wavelength).min()
-                rmaxNN = 0.5 * NP.sqrt(du**2 + dv**2) * min_lambda 
-    
-                gridx = gridu[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
-                gridy = gridv[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
-                gridxy = NP.hstack((gridx.reshape(-1,1), gridy.reshape(-1,1)))
-                wl = NP.ones(gridu.shape)[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
-                wl = wl.reshape(-1)
-                distNN = 2.0 * max([NP.sqrt(aprtr.xmax['P1']**2 + NP.sqrt(aprtr.ymax['P1']**2)), NP.sqrt(aprtr.xmax['P1']**2 + NP.sqrt(aprtr.ymax['P1']**2)), aprtr.rmax['P1'], aprtr.rmax['P2']]) # factor in the front is to safely estimate kernel around some extra grid pixels
-                indNN_list, blind, vuf_gridind = LKP.find_NN(NP.zeros((1,2)), gridxy, distance_ULIM=distNN, flatten=True, parallel=False)
-                dxy = gridxy[vuf_gridind,:]
-                unraveled_vuf_ind = NP.unravel_index(vuf_gridind, gridu.shape+(self.f.size,))
-    
-                self.autocorr_wts_vuf = {p: NP.zeros(gridu.shape+(self.f.size,), dtype=NP.complex64) for p in pol}
-                # self.pbeam = {p: NP.zeros((2*gridv.shape[0],2*gridu.shape[1],self.f.size), dtype=NP.complex64) for p in pol}                
-                for p in pol:
-                    krn = aprtr.compute(dxy, wavelength=wl[vuf_gridind], pol=p, rmaxNN=rmaxNN, load_lookup=False)
-                    self.autocorr_wts_vuf[p][unraveled_vuf_ind] = krn[p]
-                    self.autocorr_wts_vuf[p] = self.autocorr_wts_vuf[p] / NP.sum(self.autocorr_wts_vuf[p], axis=(0,1), keepdims=True)
-                    # sum_wts = NP.sum(self.autocorr_wts_vuf[p], axis=(0,1), keepdims=True)
-                    # padded_wts_vuf = NP.pad(self.autocorr_wts_vuf[p], ((self.gridv.shape[0],self.gridv.shape[0]),(self.gridu.shape[1],self.gridu.shape[1]),(0,0)), mode='constant', constant_values=0)
-                    # padded_wts_vuf = NP.fft.ifftshift(padded_wts_vuf, axes=(0,1))
-                    # wts_lmf = NP.fft.fft2(padded_wts_vuf, axes=(0,1)) / sum_wts
-                    # if NP.abs(wts_lmf.imag).max() < 1e-10:
-                    #     self.pbeam[p] = NP.fft.fftshift(wts_lmf.real, axes=(0,1))
-                    # else:
-                    #     raise ValueError('Significant imaginary component found in the power pattern')
-                    
-                self.autocorr_set = True
+            self.autocorr_wts_vuf, self.autocorr_data_vuf = self.antenna_array.makeAutoCorrCube(datapool=datapool, tbinsize=self.tbinsize)
+            self.autocorr_set = True
             
     ############################################################################
-
-    def evalPowerPattern(self, pad=0):
+    
+    def evalPowerPattern(self, pad=0, skypos=None, datapool='avg'):
 
         """
         ------------------------------------------------------------------------
-        Evaluate power pattern for the antenna from its auto-correlated 
-        footprint
+        Evaluate power pattern for the antenna from its zero-centered 
+        cross-correlated footprint
 
         Input:
+
+        datapool
+                [string] Specifies whether weights to be used in determining 
+                the power pattern come from 'stack', 'current', or 'avg' 
+                (default). 
+
+        skypos  [numpy array] Positions on sky at which power pattern is 
+                to be esimated. It is a 2- or 3-column numpy array in 
+                direction cosine coordinates. It must be of size nsrc x 2 
+                or nsrc x 3. If set to None (default), the power pattern is 
+                estimated over a grid on the sky. If a numpy array is
+                specified, then power pattern at the given locations is 
+                estimated.
 
         pad     [integer] indicates the amount of padding before estimating
                 power pattern image. Applicable only when attribute 
                 measured_type is set to 'E-field' (MOFF imaging). The output 
-                image of the pwoer pattern will be of size 2**pad-1 times the 
+                image of the power pattern will be of size 2**pad-1 times the 
                 size of the antenna array grid along u- and v-axes. Value must 
-                not be negative. Default=0 (implies no padding of the 
-                auto-correlated footprint). pad=1 implies padding by factor 2 
-                along u- and v-axes for MOFF
+                not be negative. Default=0 (implies no padding). pad=1 implies 
+                padding by factor 2 along u- and v-axes for MOFF
+
+        Outputs:
+
+        pbinfo is a dictionary with the following keys and values:
+        'pb'    [dictionary] Dictionary with keys 'P1' and 'P2' for 
+                polarization. Under each key is a numpy array of estimated 
+                power patterns. If skypos was set to None, the numpy array is 
+                3D masked array of size nm x nl x nchan. The mask is based on 
+                which parts of the grid are valid direction cosine coordinates 
+                on the sky. If skypos was a numpy array denoting specific sky 
+                locations, the value in this key is a 2D numpy array of size 
+                nsrc x nchan
+        'llocs' [None or numpy array] If the power pattern estimated is a grid
+                (if input skypos was set to None), it contains the l-locations
+                of the grid on the sky. If input skypos was not set to None, 
+                the value under this key is set to None
+        'mlocs' [None or numpy array] If the power pattern estimated is a grid
+                (if input skypos was set to None), it contains the m-locations
+                of the grid on the sky. If input skypos was not set to None, 
+                the value under this key is set to None
         ------------------------------------------------------------------------
         """
 
         if not isinstance(pad, int):
             raise TypeError('Input keyword pad must be an integer')
         
-        if not self.autocorr_set:
-            self.evalAutoCorr()
+        if datapool not in ['recent', 'stack', 'avg']:
+            raise ValueError('Invalid value specified for input datapool')
 
+        self.antenna_array.evalAllAntennaPairCorrWts()
+        centered_crosscorr_wts_vuf = self.antenna_array.makeCrossCorrWtsCube()
+        du = self.antenna_array.gridu[0,1] - self.antenna_array.gridu[0,0]
+        dv = self.antenna_array.gridv[1,0] - self.antenna_array.gridv[0,0]
+        ulocs = du*(NP.arange(2*self.antenna_array.gridu.shape[1])-self.antenna_array.gridu.shape[1])
+        vlocs = dv*(NP.arange(2*self.antenna_array.gridv.shape[0])-self.antenna_array.gridv.shape[0])
         pol = ['P1', 'P2']
-        if self.measured_type == 'E-field':
-            self.pbeam = {p: None for p in pol}                
-            for p in pol:
-                sum_wts = NP.sum(self.autocorr_wts_vuf[p], axis=(0,1), keepdims=True)
-                padded_wts_vuf = NP.pad(self.autocorr_wts_vuf[p], (((2**pad-1)*self.gridv.shape[0],(2**pad-1)*self.gridv.shape[0]),((2**pad-1)*self.gridu.shape[1],(2**pad-1)*self.gridu.shape[1]),(0,0)), mode='constant', constant_values=0)
-                padded_wts_vuf = NP.fft.ifftshift(padded_wts_vuf, axes=(0,1))
-                wts_lmf = NP.fft.fft2(padded_wts_vuf, axes=(0,1)) / sum_wts
-                if NP.abs(wts_lmf.imag).max() < 1e-10:
-                    self.pbeam[p] = NP.fft.fftshift(wts_lmf.real, axes=(0,1))
-                else:
-                    raise ValueError('Significant imaginary component found in the power pattern')
+        pbinfo = {'pb': {}}
+        for p in pol:
+            pb = evalApertureResponse(centered_crosscorr_wts_vuf[p], ulocs, vlocs, pad=pad, skypos=skypos)
+            pbinfo['pb'][p] = pb['pb']
+            pbinfo['llocs'] = pb['llocs']
+            pbinfo['mlocs'] = pb['mlocs']
+
+        return pbinfo
 
     ############################################################################
-
+    
     def removeAutoCorr(self, lkpinfo=None, forceeval=False, datapool='avg',
                        pad=0):
 
@@ -7389,9 +7613,11 @@ class NewImage:
                     raise TypeError('Input keyword data pool must be a string')
         
                 if forceeval or (not self.autocorr_set):
-                    self.evalAutoCorr(lkpinfo=lkpinfo, forceeval=forceeval)
+                    self.evalAutoCorr(forceeval=forceeval)
+                    # self.evalAutoCorr(lkpinfo=lkpinfo, forceeval=forceeval)
         
                 autocorr_wts_vuf = copy.deepcopy(self.autocorr_wts_vuf)
+                autocorr_data_vuf = copy.deepcopy(self.autocorr_data_vuf)
                 pol = ['P1', 'P2']
                 for p in pol:
                     if datapool == 'avg':
@@ -7399,9 +7625,9 @@ class NewImage:
                             vis_vuf = NP.copy(self.grid_vis_avg[p])
                             wts_vuf = NP.copy(self.grid_illumination_avg[p])
     
-                            autocorr_wts_vuf[p] = autocorr_wts_vuf[p][NP.newaxis,:,:,:]
-                            vis_vuf = vis_vuf - (vis_vuf[:,self.gridv.shape[0],self.gridu.shape[1],:].reshape(vis_vuf.shape[0],1,1,self.f.size) / autocorr_wts_vuf[p][0,self.gridv.shape[0],self.gridu.shape[1],:].reshape(1,1,1,self.f.size)) * autocorr_wts_vuf[p]
-                            wts_vuf = wts_vuf - (wts_vuf[:,self.gridv.shape[0],self.gridu.shape[1],:].reshape(wts_vuf.shape[0],1,1,self.f.size) / autocorr_wts_vuf[p][0,self.gridv.shape[0],self.gridu.shape[1],:].reshape(1,1,1,self.f.size)) * autocorr_wts_vuf[p]
+                            # autocorr_wts_vuf[p] = autocorr_wts_vuf[p][NP.newaxis,:,:,:]
+                            vis_vuf = vis_vuf - (vis_vuf[:,self.gridv.shape[0],self.gridu.shape[1],:][:,NP.newaxis,NP.newaxis,:] / autocorr_data_vuf[p][:,self.gridv.shape[0],self.gridu.shape[1],:][:,NP.newaxis,NP.newaxis,:]) * autocorr_data_vuf[p]
+                            wts_vuf = wts_vuf - (wts_vuf[:,self.gridv.shape[0],self.gridu.shape[1],:][:,NP.newaxis,NP.newaxis,:] / autocorr_wts_vuf[p][:,self.gridv.shape[0],self.gridu.shape[1],:][:,NP.newaxis,NP.newaxis,:]) * autocorr_wts_vuf[p]
                             sum_wts = NP.sum(wts_vuf, axis=(1,2), keepdims=True)
                             padded_wts_vuf = NP.pad(wts_vuf, ((0,0),((2**pad-1)*self.gridv.shape[0],(2**pad-1)*self.gridv.shape[0]),((2**pad-1)*self.gridu.shape[1],(2**pad-1)*self.gridu.shape[1]),(0,0)), mode='constant', constant_values=0)
                             padded_wts_vuf = NP.fft.ifftshift(padded_wts_vuf, axes=(1,2))
@@ -7423,7 +7649,7 @@ class NewImage:
                             vis_vuf = NP.copy(self.vis_vuf[p])
                             wts_vuf = NP.copy(self.wts_vuf[p])
 
-                            vis_vuf = vis_vuf - (vis_vuf[self.gridv.shape[0],self.gridu.shape[1],:].reshape(1,1,self.f.size) / autocorr_wts_vuf[p][self.gridv.shape[0],self.gridu.shape[1],:].reshape(1,1,self.f.size)) * autocorr_wts_vuf[p]
+                            vis_vuf = vis_vuf - (vis_vuf[self.gridv.shape[0],self.gridu.shape[1],:].reshape(1,1,self.f.size) / autocorr_data_vuf[p][self.gridv.shape[0],self.gridu.shape[1],:].reshape(1,1,self.f.size)) * autocorr_data_vuf[p]
                             wts_vuf = wts_vuf - (wts_vuf[self.gridv.shape[0],self.gridu.shape[1],:].reshape(1,1,self.f.size) / autocorr_wts_vuf[p][self.gridv.shape[0],self.gridu.shape[1],:].reshape(1,1,self.f.size)) * autocorr_wts_vuf[p]
                             sum_wts = NP.sum(wts_vuf, axis=(0,1), keepdims=True)
                             padded_wts_vuf = NP.pad(wts_vuf, (((2**pad-1)*self.gridv.shape[0],(2**pad-1)*self.gridv.shape[0]),((2**pad-1)*self.gridu.shape[1],(2**pad-1)*self.gridu.shape[1]),(0,0)), mode='constant', constant_values=0)
@@ -7447,6 +7673,218 @@ class NewImage:
             else:
                 print 'Antenna auto-correlations have been removed already'
             
+    ############################################################################
+    
+    def getStats(self, box_type='square', box_center=None, box_size=None,
+                 rms_box_scale_factor=10.0, coords='physical', datapool='avg'):
+
+        """
+        ------------------------------------------------------------------------
+        Get statistics from images from inside specified boxes
+        NEEDS FURTHER DEVELOPMENT !!!
+
+        Inputs:
+
+        box_type    [string] Shape of box. Accepted values are 'square' 
+                    (default) and 'circle' on the celestial plane. In 3D the
+                    the box will be a cube or cylinder.
+
+        box_center  [list] Center locations of boxes specified as a list one for
+                    each box. The centers will have units as specified in input 
+                    coords. Each element must be another list, tuple or numpy 
+                    array of two or three elements. The first element refers to 
+                    the x-coordinate of the box center, the second refers to 
+                    y-coordinate of the box center. The third element (optional)
+                    refers to the center of frequency around which the 3D box 
+                    must be placed. If third element is not specified, it will 
+                    be assumed to be center of the band. If coords is set to 
+                    'physical', these three elements will have units of dircos,
+                    dircos and frequency (Hz). If coords is set to 'index', 
+                    these three elements must be indices of the three axes.
+
+        box_size    [list] Sizes of boxes specified as a list one for each box.
+                    Number of elements in this list will be equal to that in 
+                    input box_center. They will have 'physical' (dircos, 
+                    frequency in Hz) or 'index' units as specified in the input 
+                    coords. Each element in the list is a one- or two-element 
+                    list, tuple or numpy array. The first element is size of the 
+                    box in the celestial plane (size of square if box_type is set 
+                    to 'square', diameter of circle if box_type is set to 
+                    'circle'). The second element (optional) is size along 
+                    frequency axis. If second element is not specified, it will 
+                    be assumed to be the entire band.
+                    
+        rms_box_scale_factor
+                    [scalar] Size scale on celestial plane used to determine 
+                    the box to determine the rms statistic. Must be positive. 
+                    For instance, the box size used to find the rms will use a 
+                    box that is rms_box_scale_factor times the box size on each
+                    side used for determining the peak. Default = 10.0
+
+        coords      [string] String specifying coordinates of box_center and
+                    box_size. If set to 'physical' (default) the box_center 
+                    will have units of [dircos, dircos, frequency in Hz 
+                    (optional)] and box_size will have units of [dircos, 
+                    frequency in Hz (optional)]. If set to 'index', box_center 
+                    will have units of [index, index, index (optional)] and
+                    box_size will have units of [number of pixels, number of 
+                    frequency channels].
+
+        datapool    [string] String specifying type of image on which the 
+                    statistics will be estimated. Accepted values are 'avg'
+                    (default), 'stack' and 'current'. These represent 
+                    time-averaged, stacked and recent images respectively
+
+        Outputs:
+
+        outstats    [list] List of dictionaries one for each element in input
+                    box_center. Each dictionary consists of the following keys
+                    'P1' and 'P2'  for the two polarizations. Under each of 
+                    these keys is another dictionary with the following keys and
+                    values:
+                    'peak-spectrum'
+                            [list of numpy arrays] List of Numpy arrays
+                            with peak value in each frequency channel. This array
+                            is of size nchan. Length of the list is equal to the 
+                            number of timestamps as determined by input datapool. 
+                            If input datapool is set to 'current', the list will 
+                            contain one numpy array of size nchan. If datapool is 
+                            set to 'avg' or 'stack', the list will contain n_t
+                            number of numpy arrays one for each processed 
+                            timestamp
+                    'peak-avg'
+                            [list] Average of each numpy array in the list under
+                            key 'peak-spectrum'. It will have n_t elements where
+                            n_t is the number of timestamps as determined by 
+                            input datapool
+                    'nn-spectrum'
+                            [list] Frequency spectrum of the nearest neighbour 
+                            pixel relative to the box center. 
+                    'mad'   [list] Median Absolute Deviation(s) in
+                            the box determined by input rms_box_scale_factor. 
+                            If input datapool is set to 'current', it will be a 
+                            one-element list, but if set to 'avg' or 'stack', it 
+                            will be a list one for each timestamp in the image
+        ------------------------------------------------------------------------
+        """
+
+        if box_type not in ['square', 'circle']:
+            raise ValueError('Input box_type must be specified as "square" or "circle"')
+        if box_center is None:
+            raise ValueError('Input box_center must be specified')
+        if box_size is None:
+            raise ValueError('Input box_size must be specified')
+
+        if coords not in ['physical', 'index']:
+            raise ValueError('Input coords must be specified as "physical" or "index"')
+        if datapool not in ['avg', 'current', 'stack']:
+            raise ValueError('Input datappol must be specified as "avg", "current" or "stack"')
+        
+        if not isinstance(box_center, list):
+            raise TypeError('Input box_center must be a list')
+        if not isinstance(box_size, list):
+            raise TypeError('Input box_size must be a list')
+
+        if len(box_center) != len(box_size):
+            raise ValueError('Lengths of box_center and box_size must be equal')
+
+        if isinstance(rms_box_scale_factor, (int,float)):
+            rms_box_scale_factor = float(rms_box_scale_factor)
+            if rms_box_scale_factor <= 0.0:
+                raise ValueError('Input rms_box_scale_factor must be positive')
+        else:
+            raise TypeError('Input rms_box_scale_factor must be a scalar')
+
+        bandwidth = (self.f[1] - self.f[0]) * self.f.size
+        lfgrid = self.gridl[:,:,NP.newaxis] * NP.ones(self.f.size).reshape(1,1,-1) # nm x nl x nchan
+        mfgrid = self.gridm[:,:,NP.newaxis] * NP.ones(self.f.size).reshape(1,1,-1)  # nm x nl x nchan
+        fgrid = NP.ones_like(self.gridl)[:,:,NP.newaxis] * self.f.reshape(1,1,-1)  # nm x nl x nchan
+        outstats = []
+        for i in xrange(len(box_center)):
+            stats = {}
+            bc = NP.asarray(box_center[i]).reshape(-1)
+            bs = NP.asarray(box_size[i]).reshape(-1)
+            if (bc.size < 2) or (bc.size > 3):
+                raise ValueError('Each box center must have two or three elements')
+            if (bs.size < 1) or (bs.size > 2):
+                raise ValueError('Each box size must have one or two elements')
+            if bc.size == 2:
+                if coords == 'physical':
+                    bc = NP.hstack((bc, NP.mean(self.f)))
+                else:
+                    bc = NP.hstack((bc, self.f.size/2))
+            if bs.size == 1:
+                if coords == 'physical':
+                    bs = NP.hstack((bs, bandwidth))
+                else:
+                    bs = NP.hstack((bs, self.f.size))
+            if coords == 'physical':
+                if NP.sum(bc[:2]**2) > 1.0:
+                    raise ValueError('Invalid dirction cosines specified')
+                if (bc[2] < self.f.min()) or (bc[2] > self.f.max()):
+                    raise ValueError('Invalid frequency specified in input box_center')
+            else:
+                if (bc[0] < 0) or (bc[1] < 0) or (bc[0] > self.gridl.shape[1]) or (bc[1] > self.gridl.shape[0]):
+                    raise ValueError('Invalid box center specified')
+                if bc[2] > self.f.size:
+                    bc[2] = self.f.size
+            if coords == 'physical':
+                nn_ind2d = NP.argmin(NP.abs((lfgrid[:,:,0] - bc[0])**2 + (mfgrid[:,:,0] - bc[1])**2))
+                unraveled_nn_ind2d = NP.unravel_index(nn_ind2d, self.gridl.shape)
+                unraveled_nn_ind3d = (NP.asarray([unraveled_nn_ind2d[0]]*self.f.size), NP.asarray([unraveled_nn_ind2d[1]]*self.f.size), NP.arange(self.f.size))
+                if box_type == 'square':
+                    ind3d = (NP.abs(lfgrid - bc[0]) <= 0.5*bs[0]) & (NP.abs(mfgrid - bc[1]) <= 0.5*bs[0]) & (NP.abs(fgrid - bc[2]) <= 0.5*bs[1])
+                    ind3d_rmsbox = (NP.abs(lfgrid - bc[0]) <= 0.5*rms_box_scale_factor*bs[0]) & (NP.abs(mfgrid - bc[1]) <= 0.5*rms_box_scale_factor*bs[0]) & (NP.abs(fgrid - bc[2]) <= 0.5*bs[1])
+                else:
+                    ind3d = (NP.sqrt(NP.abs(lfgrid - bc[0])**2 + NP.abs(mfgrid - bc[0])**2) <= 0.5*bs[0]) & (NP.abs(fgrid - bc[2]) <= 0.5*bs[1])
+                    ind3d_rmsbox = (NP.sqrt(NP.abs(lfgrid - bc[0])**2 + NP.abs(mfgrid - bc[0])**2) <= 0.5*rms_box_scale_factor*bs[0]) & (NP.abs(fgrid - bc[2]) <= 0.5*bs[1])
+                msk = NP.logical_not(ind3d)
+                msk_rms = NP.logical_not(ind3d_rmsbox)
+    
+                for apol in ['P1', 'P2']:
+                    stats[apol] = {'peak-spectrum': [], 'peak-avg': [], 'mad': [], 'nn-spectrum': [], 'nn-avg': []}
+                    if datapool == 'current':
+                        if self.nzsp_img[apol] is not None:
+                            img_masked = MA.array(self.nzsp_img[apol], mask=msk)
+                            stats[apol]['peak-spectrum'] += [NP.amax(NP.abs(img_masked), axis=(0,1))]
+                            stats[apol]['peak-avg'] += [NP.mean(stats[apol]['peak-spectrum'])]
+                            stats[apol]['nn-spectrum'] += [NP.abs(img_masked[unraveled_nn_ind3d])]
+                            stats[apol]['nn-avg'] += [NP.mean(stats[apol]['nn-spectrum'])]
+                            img_masked = MA.array(self.nzsp_img[apol], mask=msk_rms)
+                            mdn = NP.median(img_masked[~img_masked.mask])
+                            absdev = NP.abs(img_masked - mdn)
+                            stats[apol]['mad'] += [NP.median(absdev[~absdev.mask])]
+                    else:
+                        if datapool == 'avg':
+                            if self.nzsp_img_avg[apol] is not None:
+                                for ti in range(self.nzsp_img_avg[apol].shape[0]):
+                                    img_masked = MA.array(self.nzsp_img_avg[apol][ti,...], mask=msk)
+                                    stats[apol]['peak-spectrum'] += [NP.amax(NP.abs(img_masked), axis=(0,1))]
+                                    stats[apol]['peak-avg'] += [NP.mean(stats[apol]['peak-spectrum'][ti])]
+                                    stats[apol]['nn-spectrum'] += [NP.abs(img_masked[unraveled_nn_ind3d])]
+                                    stats[apol]['nn-avg'] += [NP.mean(stats[apol]['nn-spectrum'][ti])]
+                                    img_masked = MA.array(self.nzsp_img_avg[apol][ti,...], mask=msk_rms)
+                                    mdn = NP.median(img_masked[~img_masked.mask])
+                                    absdev = NP.abs(img_masked - mdn)
+                                    stats[apol]['mad'] += [NP.median(absdev[~absdev.mask])]
+                        else:
+                            if self.img_stack[apol] is not None:
+                                for ti in range(self.img_stack[apol].shape[0]):
+                                    img_masked = MA.array(self.img_stack[apol][ti,...], mask=msk)
+                                    stats[apol]['peak-spectrum'] += [NP.amax(NP.abs(img_masked), axis=(0,1))]
+                                    stats[apol]['peak-avg'] += [NP.mean(stats[apol]['peak-spectrum'][ti])]
+                                    stats[apol]['nn-spectrum'] += [NP.abs(img_masked[unraveled_nn_ind3d])]
+                                    stats[apol]['nn-avg'] += [NP.mean(stats[apol]['nn-spectrum'][ti])]
+                                    img_masked = MA.array(self.img_stack[apol][ti,...], mask=msk_rms)
+                                    mdn = NP.median(img_masked[~img_masked.mask])
+                                    absdev = NP.abs(img_masked - mdn)
+                                    stats[apol]['mad'] += [NP.median(absdev[~absdev.mask])]
+                outstats += [stats]
+            else:
+                pass
+
+        return outstats
+
     ############################################################################
 
     def save(self, imgfile, pol=None, overwrite=False, verbose=True):
@@ -7798,7 +8236,7 @@ class PolInfo:
         # Perform flag verification and re-update current flags
         if verify or (flags is None):
             for pol in ['P1', 'P2']:
-                if NP.any(NP.isnan(self.Et[pol])):
+                if NP.any(NP.isnan(self.Et[pol])) and NP.any(NP.isnan(self.Ef[pol])):
                     self.flag[pol] = True
 
     ############################################################################ 
@@ -7910,7 +8348,13 @@ class Antenna:
     label:      [Scalar] A unique identifier (preferably a string) for the 
                 antenna. 
 
+    typetag     [scalar or string] Tag (integer or string) to identify antenna
+                type. Will be used in determining if the antenna array is made
+                of identical antennas or not
+
     latitude:   [Scalar] Latitude of the antenna's location.
+
+    longitude:  [Scalar] Longitude of the antenna's location.
 
     location:   [Instance of GEOM.Point class] The location of the antenna in 
                 local East, North, Up coordinate system.
@@ -8021,6 +8465,9 @@ class Antenna:
                  timestamp flags, timestamps and frequency channel indices and 
                  the type of data (most recent or stacked electric fields)
 
+    evalGridIllumination()
+                 Evaluate antenna illumination function on a specified grid
+
     save():      Saves the antenna information to disk. Needs serious 
                  development. 
 
@@ -8028,17 +8475,17 @@ class Antenna:
     ----------------------------------------------------------------------------
     """
 
-    def __init__(self, label, latitude, location, center_freq, nsamples=1,
-                 aperture=None):
+    def __init__(self, label, typetag, latitude, longitude, location, 
+                 center_freq, nsamples=1, aperture=None):
 
         """
         ------------------------------------------------------------------------
         Initialize the Antenna Class which manages an antenna's information 
 
         Class attributes initialized are:
-        label, latitude, location, pol, t, timestamp, f0, f, wts, wtspos, 
-        wtspos_scale, blc, trc, timestamps, antpol, Et_stack, Ef_stack, 
-        flag_stack, aperture
+        label, latitude, longitude, location, pol, t, timestamp, f0, f, wts, 
+        wtspos, wtspos_scale, blc, trc, timestamps, antpol, Et_stack, Ef_stack, 
+        flag_stack, aperture, typetag
      
         Read docstring of class Antenna for details on these attributes.
         ------------------------------------------------------------------------
@@ -8050,9 +8497,22 @@ class Antenna:
             raise NameError('Antenna label must be provided.')
 
         try:
+            typetag
+        except NameError:
+            raise NameError('Antenna type tag must be provided.')
+
+        if not isinstance(typetag, (int,str)):
+            raise TypeError('Antenna type tag must be an integer or string')
+
+        try:
             latitude
         except NameError:
-            self.latitude = 0.0
+            latitude = 0.0
+
+        try:
+            longitude
+        except NameError:
+            longitude = 0.0
 
         try:
             location
@@ -8065,7 +8525,9 @@ class Antenna:
             raise NameError('Center frequency must be provided.')
 
         self.label = label
+        self.typetag = typetag
         self.latitude = latitude
+        self.longitude = longitude
 
         if isinstance(location, GEOM.Point):
             self.location = location
@@ -8116,7 +8578,7 @@ class Antenna:
     ############################################################################
 
     def __str__(self):
-        return ' Instance of class "{0}" in module "{1}" \n label: ({2[0]}, {2[1]}) \n location: {3}'.format(self.__class__.__name__, self.__module__, self.label, self.location.__str__())
+        return ' Instance of class "{0}" in module "{1}" \n label: {2} \n typetag: {3} \n location: {4}'.format(self.__class__.__name__, self.__module__, self.label, self.typetag, self.location.__str__())
 
     ############################################################################
 
@@ -8253,6 +8715,10 @@ class Antenna:
             label      [Scalar] A unique identifier (preferably a string) for 
                        the antenna. Default=None means no update to apply
     
+            typetag    [scalar or string] Antenna type identifier (integer or
+                       preferably string) which will be used in determining if
+                       all antennas in the antenna array are identical
+
             latitude   [Scalar] Latitude of the antenna's location. Default=None 
                        means no update to apply
     
@@ -8275,6 +8741,10 @@ class Antenna:
                        which are stored under keys 'P1' and 'P22'. Default=None 
                        implies no updates for Et.
     
+            Ef         [dictionary] holds spectrum under 2 polarizations 
+                       which are stored under keys 'P1' and 'P22'. Default=None 
+                       implies no updates for Ef.
+
             aperture   [instance of class APR.Aperture] aperture 
                        information for the antenna. Read docstring of class 
                        Aperture for details
@@ -8347,6 +8817,7 @@ class Antenna:
         """
 
         label = None
+        typetag = None
         location = None
         timestamp = None
         t = None
@@ -8354,6 +8825,7 @@ class Antenna:
         stack = False
         verify_flags = True
         Et = None
+        Ef = None
         wtsinfo = None
         gridfunc_freq = None
         ref_freq = None
@@ -8365,10 +8837,12 @@ class Antenna:
                 raise TypeError('Input parameter containing updates must be a dictionary')
 
             if 'label' in update_dict: label = update_dict['label']
+            if 'typetag' in update_dict: typetag = update_dict['typetag']
             if 'location' in update_dict: location = update_dict['location']
             if 'timestamp' in update_dict: timestamp = update_dict['timestamp']
             if 't' in update_dict: t = update_dict['t']
             if 'Et' in update_dict: Et = update_dict['Et']
+            if 'Ef' in update_dict: Ef = update_dict['Ef']
             if 'flags' in update_dict: flags = update_dict['flags']
             if 'stack' in update_dict: stack = update_dict['stack']
             if 'verify_flags' in update_dict: verify_flags = update_dict['verify_flags']            
@@ -8379,6 +8853,7 @@ class Antenna:
             if 'aperture' in update_dict: aperture = update_dict['aperture']
 
         if label is not None: self.label = label
+        if typetag is not None: self.typetag = typetag
         if location is not None: self.location = location
         if timestamp is not None:
             self.timestamp = timestamp
@@ -8389,8 +8864,8 @@ class Antenna:
             self.f = self.f0 + self.channels()     
 
         # Updates, Et, Ef, delays, flags and verifies flags
-        if (Et is not None) or (delaydict is not None) or (flags is not None):
-            self.antpol.update(Et=Et, delaydict=delaydict, flags=flags, verify=verify_flags) 
+        if (Et is not None) or (Ef is not None) or (delaydict is not None) or (flags is not None):
+            self.antpol.update(Et=Et, Ef=Ef, delaydict=delaydict, flags=flags, verify=verify_flags) 
 
         # Stack flags and data
         self.update_flags(flags=None, stack=stack, verify=True)  
@@ -8549,7 +9024,7 @@ class Antenna:
 
                  'label'        [string] antenna label 
                  'pol'          [string] polarization string, one of 'P1' or 
-                                'P22'
+                                'P2'
                  'E-fields'     [numpy array] selected electric fields spectra
                                 with dimensions n_ts x nchan which
                                 are in time-frequency order. If no electric 
@@ -8637,6 +9112,99 @@ class Antenna:
 
         return outdict
 
+    ############################################################################
+
+    def evalGridIllumination(self, uvlocs=None, xy_center=None):
+
+        """
+        ------------------------------------------------------------------------
+        Evaluate antenna illumination function on a specified grid
+
+        Inputs:
+
+        uvlocs      [tuple] 2-element tuple where first and second elements
+                    are numpy arrays that contain u- and v-locations 
+                    respectively. Default=None means determine u- and v-
+                    locations from attributes blc and trc
+
+        xy_center   [tuple, list or numpy array] 2-element list, tuple or numpy
+                    array denoting x- and y-locations of center of antenna.
+                    Default=None means use the x- and y-locations of the 
+                    antenna
+
+        Outputs:
+
+        antenna_grid_wts_vuf
+                    [scipy sparse array] Complex antenna illumination weights 
+                    placed on the specified grid. When expanded it will be of 
+                    size nv x nu x nchan
+        ------------------------------------------------------------------------
+        """
+
+        if xy_center is None:
+            xy_center = NP.asarray([self.location.x, self.location.y])
+        elif isinstance(xy_center, (list,tuple,NP.ndarray)):
+            xy_center = NP.asarray(xy_center)
+            if xy_center.size != 2:
+                raise ValueError('Input xy_center must be a two-element numpy array')
+            xy_center = xy_center.ravel()
+        else:
+             raise TypeError('Input xy_center must be a numpy array')
+
+        wavelength = FCNST.c / self.f
+        min_wl = NP.abs(wavelength).min()
+        uvspacing = 0.5
+        if uvlocs is None:
+            blc = self.blc - xy_center
+            trc = self.trc - xy_center
+            trc = NP.amax(NP.abs(NP.vstack((blc, trc))), axis=0).ravel() / min_wl
+            blc = -1 * trc
+            gridu, gridv = GRD.grid_2d([(blc[0], trc[0]), (blc[1], trc[1])], pad=0.0, spacing=uvspacing, pow2=True)
+            du = gridu[0,1] - gridu[0,0]
+            dv = gridv[1,0] - gridv[0,0]
+        elif isinstance(uvlocs, tuple):
+            if len(uvlocs) != 2:
+                raise ValueError('Input uvlocs must be a two-element tuple')
+            ulocs, vlocs = uvlocs
+            if not isinstance(ulocs, NP.ndarray):
+                raise TypeError('Elements in input tuple uvlocs must be a numpy array')
+            if not isinstance(vlocs, NP.ndarray):
+                raise TypeError('Elements in input tuple uvlocs must be a numpy array')
+            ulocs = ulocs.ravel()
+            vlocs = vlocs.ravel()
+            du = ulocs[1] - ulocs[0]
+            dv = vlocs[1] - vlocs[0]
+            gridu, gridv = NP.meshgrid(ulocs, vlocs)
+        else:
+            raise TypeError('Input uvlocs must be a two-element tuple')
+
+        rmaxNN = 0.5 * NP.sqrt(du**2 + dv**2) * min_wl
+        gridx = gridu[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
+        gridy = gridv[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
+        gridxy = NP.hstack((gridx.reshape(-1,1), gridy.reshape(-1,1)))
+        wl = NP.ones(gridu.shape)[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
+        max_aprtr_size = max([NP.sqrt(self.aperture.xmax['P1']**2 + NP.sqrt(self.aperture.ymax['P1']**2)), NP.sqrt(self.aperture.xmax['P2']**2 + NP.sqrt(self.aperture.ymax['P2']**2)), self.aperture.rmax['P1'], self.aperture.rmax['P2']])
+        distNN = 2.0 * max_aprtr_size
+        indNN_list, blind, vuf_gridind = LKP.find_NN(xy_center.reshape(1,-1), gridxy, distance_ULIM=distNN, flatten=True, parallel=False)
+        dxy = gridxy[vuf_gridind,:]
+        unraveled_vuf_ind = NP.unravel_index(vuf_gridind, gridu.shape+(self.f.size,))
+        unraveled_vu_ind = (unraveled_vuf_ind[0], unraveled_vuf_ind[1])
+        raveled_vu_ind = NP.ravel_multi_index(unraveled_vu_ind, (gridu.shape[0], gridu.shape[1]))
+
+        antenna_grid_wts_vuf = {}
+        pol = ['P1', 'P2']
+        for p in pol:
+            krn = self.aperture.compute(dxy, wavelength=wl.ravel()[vuf_gridind], pol=p, rmaxNN=rmaxNN, load_lookup=False)
+            krn_sparse = SpM.csr_matrix((krn[p], (raveled_vu_ind,)+(unraveled_vuf_ind[2],)), shape=(gridu.size,)+(self.f.size,), dtype=NP.complex64)
+            krn_sparse_sumuv = krn_sparse.sum(axis=0)
+            krn_sparse_norm = krn_sparse.A / krn_sparse_sumuv.A
+            sprow = raveled_vu_ind
+            spcol = unraveled_vuf_ind[2]
+            spval = krn_sparse_norm[(sprow,)+(spcol,)]
+            antenna_grid_wts_vuf[p] = SpM.csr_matrix((spval, (sprow,)+(spcol,)), shape=(gridu.size,)+(self.f.size,), dtype=NP.complex64)
+    
+        return antenna_grid_wts_vuf
+
 ################################################################################
 
 class AntennaArray:
@@ -8650,6 +9218,10 @@ class AntennaArray:
     antennas:    [Dictionary] Dictionary consisting of keys which hold instances
                  of class Antenna. The keys themselves are identical to the
                  label attributes of the antenna instances they hold.
+
+    latitude     [Scalar] Latitude of the antenna array location.
+
+    longitude    [Scalar] Longitude of the antenna array location.
 
     blc          [2-element Numpy array] The coordinates of the bottom left 
                  corner of the array of antennas
@@ -8677,6 +9249,43 @@ class AntennaArray:
                  array. It is the same for all frequencies and hence no third 
                  dimension for the spectral axis.
 
+    antenna_autocorr_set
+                 [boolean] Indicates if auto-correlation of antenna-wise weights
+                 have been determined (True) or not (False).
+
+    antenna_crosswts_set
+                 [boolean] Indicates if zero-centered cross-correlation of 
+                 antenna pair weights have been determined (True) or not (False)
+
+    auto_corr_data
+                 [dictionary] holds antenna auto-correlation of complex electric 
+                 field spectra. It is under keys 'current', 'stack' and 'avg' 
+                 for the current, stacked and time-averaged auto-correlations. 
+                 Under eack of these keys is another dictionary with two keys
+                 'P1' and 'P2' for the two polarizations. Under each of these
+                 polarization keys is a dictionary with the following keys
+                 and values:
+                 'labels'   [list of strings] Contains a list of antenna 
+                            labels
+                 'E-fields' [numpy array] Contains time-averaged 
+                            auto-correlation of antenna electric fields. It is
+                            of size n_tavg x nant x nchan
+                 'twts'     [numpy array] Contains number of unflagged electric
+                            field spectra used in the averaging of antenna
+                            auto-correlation spectra. It is of size 
+                            n_tavg x nant x 1
+
+    pairwise_typetag_crosswts_vuf
+                 [dictionary] holds grid illumination wts (centered on grid 
+                 origin) obtained from cross-correlation of antenna pairs that
+                 belong to their respective typetags. Tuples of typetag pairs
+                 form the keys. Under each key is another dictionary with two
+                 keys 'P1' and 'P2' for each polarization. Under each of these
+                 polarization keys is a complex numpy array of size 
+                 nv x nu x nchan. It is obtained by correlating the aperture
+                 illumination weights of one antenna type with the complex
+                 conjugate of another.
+
     antennas_center
                  [Numpy array] geometrical center of the antenna array locations
                  as a 2-element array of x- and y-values of the center. This is
@@ -8703,10 +9312,38 @@ class AntennaArray:
 
     f0           [Scalar] Center frequency of the observing band (in Hz)
 
-    timestamp:  [Scalar] String or float representing the timestamp for the 
-                current attributes
+    typetags     [dictionary] Dictionary containing keys which are unique 
+                 antenna type tags. Under each of these type tag keys is a 
+                 set of antenna labels denoting antennas that are of that type
 
-    timestamps  [list] list of all timestamps to be held in the stack 
+    pairwise_typetags     
+                 [dictionary] Dictionary containing keys which are unique 
+                 pairwise combination (tuples) of antenna type tags. Under each 
+                 of these pairwise type tag keys is a dictionary with two keys 
+                 'auto' and 'cross' each of which contains a set of pairwise 
+                 (tuple) antenna labels denoting the antenna pairs that are of 
+                 that type. Under 'auto' are tuples with same antennas while
+                 under 'cross' it contains antenna pairs in which the antennas 
+                 are not the same. The 'auto' key exists only when antenna
+                 type tag tuple contains both antennas of same type. 
+
+    antenna_pair_to_typetag
+                 [dictionary] Dictionary containing antenna pair keys and the
+                 corresponding values are typetag pairs.
+
+    timestamp:   [Scalar] String or float representing the timestamp for the 
+                 current attributes
+
+    timestamps   [list] list of all timestamps to be held in the stack 
+
+    tbinsize     [scalar or dictionary] Contains bin size of timestamps while
+                 averaging after stacking. Default = None means all antenna 
+                 E-field auto-correlation spectra over all timestamps are 
+                 averaged. If scalar, the same (positive) value applies to all 
+                 polarizations. If dictionary, timestamp bin size (positive) in 
+                 seconds is provided under each key 'P1' and 'P2'. If any of 
+                 the keys is missing the auto-correlated antenna E-field spectra 
+                 for that polarization are averaged over all timestamps.
 
     grid_mapper [dictionary] antenna-to-grid mapping information for each of
                 four polarizations under keys 'P1' and 'P2'. Under each
@@ -8916,6 +9553,9 @@ class AntennaArray:
                       
     __sub__()         Operator overloading for removing antenna(s)
                       
+    pairTypetags()    Combine antenna typetags to create pairwise typetags for 
+                      antenna pairs and update attribute pairwise_typetags
+
     add_antennas()    Routine to add antenna(s) to the antenna array instance. 
                       A wrapper for operator overloading __add__() and 
                       __radd__()
@@ -8970,6 +9610,42 @@ class AntennaArray:
                       for every antenna. Flags are taken into account while 
                       constructing this grid.
 
+    evalAntennaPairCorrWts()
+                      Evaluate correlation of pair of antenna illumination 
+                      weights on grid. It will be computed only if it was not 
+                      computed or stored in attribute 
+                      pairwise_typetag_crosswts_vuf earlier
+
+    evalAntennaPairPBeam()
+                      Evaluate power pattern response on sky of an antenna pair
+
+    avgAutoCorr()     Accumulates and averages auto-correlation of electric 
+                      fields of individual antennas under each polarization
+
+    evalAutoCorr()    Estimates antenna-wise E-field auto-correlations under 
+                      both polarizations. It can be for the msot recent 
+                      timestamp, stacked or averaged along timestamps.
+
+    evalAntennaAutoCorrWts()
+                      Evaluate auto-correlation of aperture illumination of 
+                      each antenna on the UVF-plane
+
+    evalAllAntennaPairCorrWts()
+                      Evaluate zero-centered cross-correlation of aperture 
+                      illumination of each antenna pair on the UVF-plane
+
+    makeAutoCorrCube()
+                      Constructs the grid of antenna aperture illumination 
+                      auto-correlation using the gridding information 
+                      determined for every antenna. Flags are taken into 
+                      account while constructing this grid
+
+    makeCrossCorrWtsCube()
+                      Constructs the grid of zero-centered cross-correlation 
+                      of antenna aperture pairs using the gridding information 
+                      determined for every antenna. Flags are taken into account 
+                      while constructing this grid
+
     quick_beam_synthesis()  
                       A quick generator of synthesized beam using antenna array 
                       field illumination pattern using the center frequency. Not 
@@ -8995,7 +9671,9 @@ class AntennaArray:
         Class attributes initialized are:
         antennas, blc, trc, gridu, gridv, grid_ready, timestamp, 
         grid_illumination, grid_Ef, f, f0, t, ordered_labels, grid_mapper, 
-        antennas_center
+        antennas_center, latitude, longitude, tbinsize, auto_corr_data, 
+        antenna_autocorr_set, typetags, pairwise_typetags, antenna_crosswts_set,
+        pairwise_typetag_crosswts_vuf, antenna_pair_to_typetag
      
         Read docstring of class AntennaArray for details on these attributes.
 
@@ -9022,11 +9700,21 @@ class AntennaArray:
         self.grid_illumination = {}
         self.grid_Ef = {}
         self.caldata = {}
+        self.latitude = None
+        self.longitude = None
         self.f = None
         self.f0 = None
         self.t = None
         self.timestamp = None
         self.timestamps = []
+        self.typetags = {}
+        self.pairwise_typetags = {}
+        self.antenna_pair_to_typetag = {}
+
+        self.auto_corr_data = {}
+        self.pairwise_typetag_crosswts_vuf = {}
+        self.antenna_autocorr_set = False
+        self.antenna_crosswts_set = False
 
         self._ant_contribution = {}
 
@@ -9063,8 +9751,11 @@ class AntennaArray:
         if antenna_array is not None:
             self += antenna_array
             self.f = NP.copy(self.antennas.itervalues().next().f)
-            self.f = NP.copy(self.antennas.itervalues().next().f0)
+            self.f0 = NP.copy(self.antennas.itervalues().next().f0)
             self.t = NP.copy(self.antennas.itervalues().next().t)
+            if self.latitude is None:
+                self.latitude = NP.copy(self.antennas.itervalues().next().latitude)
+                self.longitude = NP.copy(self.antennas.itervalues().next().longitude)
             self.timestamp = copy.deepcopy(self.antennas.itervalues().next().timestamp)
             self.timestamps += [copy.deepcopy(self.timestamp)]
         
@@ -9098,7 +9789,14 @@ class AntennaArray:
                     print "For updating, use the update() method. Ignoring antenna {0}".format(k)
                 else:
                     retval.antennas[k] = v
+                    if v.typetag not in retval.typetags:
+                        retval.typetags[v.typetag] = {v.label}
+                    else:
+                        retval.typetags[v.typetag].add(v.label)
                     print 'Antenna "{0}" added to the list of antennas.'.format(k)
+            if retval.latitude is None:
+                retval.latitude = others.latitude
+                retval.longitude = others.longitude
         elif isinstance(others, dict):
             # for item in others.values():
             for item in others.itervalues():
@@ -9108,7 +9806,14 @@ class AntennaArray:
                         print "For updating, use the update() method. Ignoring antenna {0}".format(item.label)
                     else:
                         retval.antennas[item.label] = item
+                        if item.typetag not in retval.typetags:
+                            retval.typetags[item.typetag] = {item.label}
+                        else:
+                            retval.typetags[item.typetag].add(item.label)
                         print 'Antenna "{0}" added to the list of antennas.'.format(item.label)
+                if retval.latitude is None:
+                    retval.latitude = item.latitude
+                    retval.longitude = item.longitude
         elif isinstance(others, list):
             for i in range(len(others)):
                 if isinstance(others[i], Antenna):
@@ -9117,16 +9822,32 @@ class AntennaArray:
                         print "For updating, use the update() method. Ignoring antenna {0}".format(others[i].label)
                     else:
                         retval.antennas[others[i].label] = others[i]
+                        if others[i].typetag not in retval.typetags:
+                            retval.typetags[others[i].typetag] = {others[i].label}
+                        else:
+                            retval.typetags[others[i].typetag].add(others[i].label)
                         print 'Antenna "{0}" added to the list of antennas.'.format(others[i].label)
                 else:
                     print 'Element \# {0} is not an instance of class Antenna.'.format(i)
+
+                if retval.latitude is None:
+                    retval.latitude = others[i].latitude
+                    retval.longitude = others[i].longitude
+
         elif isinstance(others, Antenna):
             if others.label in retval.antennas:
                 print "Antenna {0} already included in the list of antennas.".format(others.label)
                 print "For updating, use the update() method. Ignoring antenna {0}".format(others.label)
             else:
                 retval.antennas[others.label] = others
+                if others.typetag not in retval.typetags:
+                    retval.typetags[others.typetag] = {others.label}
+                else:
+                    retval.typetags[others.typetag].add(others.label)
                 print 'Antenna "{0}" added to the list of antennas.'.format(others.label)
+            if retval.latitude is None:
+                retval.latitude = others.latitude
+                retval.longitude = others.longitude
         else:
             print 'Input(s) is/are not instance(s) of class Antenna.'
 
@@ -9185,15 +9906,18 @@ class AntennaArray:
                         print "Antenna {0} does not exist in the list of antennas.".format(item.label)
                     else:
                         del retval.antennas[item.label]
+                        retval.typetags[item.typetag].remove(item.label)
                         print 'Antenna "{0}" removed from the list of antennas.'.format(item.label)
         elif isinstance(others, list):
             for i in range(0,len(others)):
                 if isinstance(others[i], str):
                     if others[i] in retval.antennas:
+                        retval.typetags[retval.antennas[others[i]].typetag].remove(others[i])
                         del retval.antennas[others[i]]
                         print 'Antenna {0} removed from the list of antennas.'.format(others[i])
                 elif isinstance(others[i], Antenna):
                     if others[i].label in retval.antennas:
+                        retval.typetags[others[i].typetag].remove(others[i].label)
                         del retval.antennas[others[i].label]
                         print 'Antenna {0} removed from the list of antennas.'.format(others[i].label)
                     else:
@@ -9201,10 +9925,12 @@ class AntennaArray:
                 else:
                     print 'Element \# {0} has no matches in the list of antennas.'.format(i)                        
         elif others in retval.antennas:
+            retval.typetags[retval.antennas[others].typetag].remove(others)
             del retval.antennas[others]
             print 'Antenna "{0}" removed from the list of antennas.'.format(others)
         elif isinstance(others, Antenna):
             if others.label in retval.antennas:
+                retval.typetags[others.typetag].remove(others.label)
                 del retval.antennas[others.label]
                 print 'Antenna "{0}" removed from the list of antennas.'.format(others.label)
             else:
@@ -9271,6 +9997,36 @@ class AntennaArray:
             print 'No antenna specified for removal.'
         else:
             self = self.__sub__(A)
+
+    ############################################################################
+
+    def pairTypetags(self):
+
+        """
+        ------------------------------------------------------------------------
+        Combine antenna typetags to create pairwise typetags for antenna pairs
+        and update attribute pairwise_typetags
+        ------------------------------------------------------------------------
+        """
+
+        typekeys = self.typetags.keys()
+        pairwise_typetags = {}
+        for i in range(len(typekeys)):
+            labels1 = list(self.typetags[typekeys[i]])
+            for j in range(i,len(typekeys)):
+                labels2 = list(self.typetags[typekeys[j]])
+                pairwise_typetags[(typekeys[i],typekeys[j])] = {}
+                if i == j:
+                    pairwise_typetags[(typekeys[i],typekeys[j])]['auto'] = set([(l1,l1) for l1 in labels1])
+                    pairwise_typetags[(typekeys[i],typekeys[j])]['cross'] = set([(l1,l2) for i1,l1 in enumerate(labels1) for i2,l2 in enumerate(labels2) if i1 < i2])
+                else:
+                    pairwise_typetags[(typekeys[i],typekeys[j])]['cross'] = set([(l1,l2) for l1 in labels1 for l2 in labels2])
+        self.pairwise_typetags = pairwise_typetags
+        self.antenna_pair_to_typetag = {}
+        for k,val in pairwise_typetags.iteritems():
+            for subkey in val:
+                for v in list(val[subkey]):
+                    self.antenna_pair_to_typetag[v] = k
 
     ############################################################################
 
@@ -9396,7 +10152,7 @@ class AntennaArray:
                  keys and information:
                  'labels':    Contains a numpy array of strings of antenna 
                               labels
-                 'E-fields':    measured electric fields (n_ant x nchan array)
+                 'E-fields':  measured electric fields (n_ant x nchan array)
         ------------------------------------------------------------------------
         """
 
@@ -9546,6 +10302,137 @@ class AntennaArray:
             outdict['twts'] = outdict['twts'][:,:,NP.newaxis]
 
         return outdict
+
+    ############################################################################
+
+    def avgAutoCorr(self, tbinsize=None):
+
+        """
+        ------------------------------------------------------------------------
+        Accumulates and averages auto-correlation of electric fields of 
+        individual antennas under each polarization
+
+        Inputs:
+
+        tbinsize [scalar or dictionary] Contains bin size of timestamps while
+                 averaging. Default = None means all antenna E-field 
+                 auto-correlation spectra over all timestamps are averaged. If 
+                 scalar, the same (positive) value applies to all polarizations. 
+                 If dictionary, timestamp bin size (positive) in seconds is 
+                 provided under each key 'P1' and 'P2'. If any of the keys is 
+                 missing the auto-correlated antenna E-field spectra for that 
+                 polarization are averaged over all timestamps.
+        ------------------------------------------------------------------------
+        """
+
+        timestamps = NP.asarray(self.timestamps).astype(NP.float)
+        twts = {}
+        auto_corr_data = {}
+        pol = ['P1', 'P2']
+        for p in pol:
+            Ef_info = self.get_E_fields(p, flag=None, tselect=NP.arange(len(self.timestamps)), fselect=None, aselect=None, datapool='stack', sort=True)
+            twts[p] = []
+            auto_corr_data[p] = {}
+            if tbinsize is None: # Average across all timestamps
+                auto_corr_data[p]['E-fields'] = NP.nansum(NP.abs(Ef_info['E-fields'])**2, axis=0, keepdims=True)
+                auto_corr_data[p]['twts'] = NP.sum(Ef_info['twts'], axis=0, keepdims=True).astype(NP.float)
+                auto_corr_data[p]['labels'] = Ef_info['labels']
+                self.tbinsize = tbinsize
+            elif isinstance(tbinsize, (int,float)): # Apply same time bin size to all polarizations
+                split_ind = NP.arange(timestamps.min()+tbinsize, timstamps.max(), tbinsize)
+                twts_split = NP.array_split(Ef_info['twts'], split_ind, axis=0)
+                Ef_split = NP.array_split(Ef_info['E-fields'], split_ind, axis=0)
+                for i in xrange(split_ind.size):
+                    if 'E-fields' not in auto_corr_data[p]:
+                        auto_corr_data[p]['E-fields'] = NP.nansum(NP.abs(Ef_info['E-fields'])**2, axis=0, keepdims=True)
+                        auto_corr_data[p]['twts'] = NP.sum(Ef_info['twts'], axis=0, keepdims=True).astype(NP.float)
+                    else:
+                        auto_corr_data[p]['E-fields'] = NP.vstack((auto_corr_data[p]['E-fields'], NP.nansum(NP.abs(Ef_info['E-fields'])**2, axis=0, keepdims=True)))
+                        auto_corr_data[p]['twts'] = NP.vstack((auto_corr_data[p]['twts'], NP.sum(Ef_info['twts'], axis=0, keepdims=True))).astype(NP.float)
+                auto_corr_data[p]['labels'] = Ef_info['labels']
+                self.tbinsize = tbinsize
+            elif isinstance(tbinsize, dict):
+                tbsize = {}
+                if p not in tbinsize:
+                    auto_corr_data[p]['E-fields'] = NP.nansum(NP.abs(Ef_info['E-fields'])**2, axis=0, keepdims=True)
+                    auto_corr_data[p]['twts'] = NP.sum(Ef_info['twts'], axis=0, keepdims=True).astype(NP.float)
+                    tbsize[p] = None
+                elif tbinsize[p] is None:
+                    auto_corr_data[p]['E-fields'] = NP.nansum(NP.abs(Ef_info['E-fields'])**2, axis=0, keepdims=True)
+                    auto_corr_data[p]['twts'] = NP.sum(Ef_info['twts'], axis=0, keepdims=True).astype(NP.float)
+                    tbsize[p] = None
+                elif isinstance(tbinsize[p], (int,float)):
+                    split_ind = NP.arange(timestamps.min()+tbinsize, timstamps.max(), tbinsize)
+                    twts_split = NP.array_split(Ef_info['twts'], split_ind, axis=0)
+                    Ef_split = NP.array_split(Ef_info['E-fields'], split_ind, axis=0)
+                    for i in xrange(split_ind.size):
+                        if 'E-fields' not in auto_corr_data[p]:
+                            auto_corr_data[p]['E-fields'] = NP.nansum(NP.abs(Ef_info['E-fields'])**2, axis=0, keepdims=True)
+                            auto_corr_data[p]['twts'] = NP.sum(Ef_info['twts'], axis=0, keepdims=True).astype(NP.float)
+                        else:
+                            auto_corr_data[p]['E-fields'] = NP.vstack((auto_corr_data[p]['E-fields'], NP.nansum(NP.abs(Ef_info['E-fields'])**2, axis=0, keepdims=True)))
+                            auto_corr_data[p]['twts'] = NP.vstack((auto_corr_data[p]['twts'], NP.sum(Ef_info['twts'], axis=0, keepdims=True))).astype(NP.float)
+                    tbsize[pol] = tbinsize[pol]                 
+                else:
+                    raise ValueError('Input tbinsize is invalid')
+                auto_corr_data[p]['labels'] = Ef_info['labels']
+                self.tbinsize = tbsize
+            else:
+                raise ValueError('Input tbinsize is invalid')
+
+            auto_corr_data[p]['E-fields'] = auto_corr_data[p]['E-fields'] / auto_corr_data[p]['twts']
+        self.auto_corr_data['avg'] = auto_corr_data
+
+    ############################################################################
+
+    def evalAutoCorr(self, datapool=None, tbinsize=None):
+
+        """
+        ------------------------------------------------------------------------
+        Estimates antenna-wise E-field auto-correlations under both
+        polarizations. It can be for the most recent timestamp, stacked or
+        averaged along timestamps.
+
+        Inputs:
+
+        datapool [string] denotes the data pool from which electric fields are 
+                 to be selected. Accepted values are 'current', 'stack', avg' or
+                 None (default, same as 'current'). If set to None or 
+                 'current', the value in tselect is ignored and only 
+                 electric fields of the most recent timestamp are selected. If
+                 set to 'avg', the auto-correlations from the stack are 
+                 averaged along the timestamps using time bin size specified
+                 in tbinsize
+
+        tbinsize [scalar or dictionary] Contains bin size of timestamps while
+                 averaging. Will be used only if datapool is set to 'avg'. 
+                 Default = None means all antenna E-field 
+                 auto-correlation spectra over all timestamps are averaged. If 
+                 scalar, the same (positive) value applies to all polarizations. 
+                 If dictionary, timestamp bin size (positive) in seconds is 
+                 provided under each key 'P1' and 'P2'. If any of the keys is 
+                 missing the auto-correlated antenna E-field spectra for that 
+                 polarization are averaged over all timestamps.
+        ------------------------------------------------------------------------
+        """
+
+        if datapool not in [None, 'current', 'stack', 'avg']:
+            raise ValueError('Input datapool must be set to None, "current", "stack" or "avg"')
+
+        if datapool in [None, 'current']:
+            self.auto_corr_data['current'] = {}
+            for p in pol:
+                Ef_info = self.get_E_fields(p, flag=None, tselect=-1, fselect=None, aselect=None, datapool='', sort=True)
+                self.auto_corr_data['current'][p] = Ef_info
+                
+        if datapool in [None, 'stack']:
+            self.auto_corr_data['stack'] = {}
+            for p in pol:
+                Ef_info = self.get_E_fields(p, flag=None, tselect=NP.arange(len(self.timestamps)), fselect=None, aselect=None, datapool='', sort=True)
+                self.auto_corr_data['current'][p] = Ef_info
+
+        if datapool in [None, 'avg']:
+            self.avgAutoCorr(tbinsize=tbinsize)
 
     ############################################################################
 
@@ -10575,7 +11462,7 @@ class AntennaArray:
 
         normalize  [Boolean] Default = False. If set to True, the gridded 
                    weights are divided by the sum of weights so that the gridded 
-                   weights add up to unity. (Need to work on normaliation)
+                   weights add up to unity. (Need to work on normalization)
 
         method     [string] The gridding method to be used in applying the 
                    antenna weights on to the antenna array grid. 
@@ -10656,11 +11543,11 @@ class AntennaArray:
         rmaxNN = 0.5 * NP.sqrt(du**2 + dv**2) * min_lambda
  
         krn = {}
-        self.ant2grid_mapper = {}
+        # self.ant2grid_mapper = {}
         antpol = ['P1', 'P2']
         for apol in antpol:
             krn[apol] = None
-            self.ant2grid_mapper[apol] = None
+            # self.ant2grid_mapper[apol] = None
             if apol in pol:
                 ant_dict = self.antenna_positions(pol=apol, flag=None, sort=True, centering=True)
                 self.ordered_labels = ant_dict['labels']
@@ -10671,6 +11558,7 @@ class AntennaArray:
                     print 'Gathered antenna data for gridding convolution for timestamp {0}'.format(self.timestamp)
 
                 if wts_change or (not self.grid_mapper[apol]['all_ant2grid']):
+                    self.ant2grid_mapper[apol] = None
                     self.grid_mapper[apol]['per_ant2grid'] = []
                     self.grid_mapper[apol]['all_ant2grid'] = {}
                     gridlocs = NP.hstack((self.gridu.reshape(-1,1), self.gridv.reshape(-1,1)))
@@ -10787,11 +11675,11 @@ class AntennaArray:
                             nproc = min(nproc, max(MP.cpu_count()-1, 1))
                         pool = MP.Pool(processes=nproc)
                         list_of_spmat = pool.map(genMatrixMapper_arg_splitter, IT.izip(list_of_val, list_of_rowcol_tuple, list_of_shapes))
-                        self.ant2grid_mapper[apol] = SM.hstack(list_of_spmat, format='csr')
+                        self.ant2grid_mapper[apol] = SpM.hstack(list_of_spmat, format='csr')
                     else:
                         spval = NP.asarray(spval)
                         sprowcol = (NP.asarray(sprow), NP.asarray(spcol))
-                        self.ant2grid_mapper[apol] = SM.csr_matrix((spval, sprowcol), shape=(self.gridu.size*self.f.size, n_ant*self.f.size))
+                        self.ant2grid_mapper[apol] = SpM.csr_matrix((spval, sprowcol), shape=(self.gridu.size*self.f.size, n_ant*self.f.size))
 
                     self.grid_mapper[apol]['all_ant2grid']['per_ant_per_freq_norm_wts'] = NP.copy(per_ant_per_freq_norm_wts)
 
@@ -10858,8 +11746,8 @@ class AntennaArray:
             Ef = Ef.ravel()
             wts = wts.ravel()
 
-            sparse_Ef = SM.csr_matrix(Ef)
-            sparse_wts = SM.csr_matrix(wts)
+            sparse_Ef = SpM.csr_matrix(Ef)
+            sparse_wts = SpM.csr_matrix(wts)
 
             # Store as sparse matrices
             self.grid_illumination[apol] = self.ant2grid_mapper[apol].dot(sparse_wts.T)
@@ -10996,6 +11884,477 @@ class AntennaArray:
                 
             if verbose:
                 print 'Gridded aperture illumination and electric fields for polarization {0} from {1:0d} unflagged contributing antennas'.format(apol, num_unflagged)
+
+    ############################################################################ 
+
+    def evalAntennaPairCorrWts(self, label1, label2=None, forceeval=False):
+
+        """
+        ------------------------------------------------------------------------
+        Evaluate correlation of pair of antenna illumination weights on grid. 
+        It will be computed only if it was not computed or stored in attribute 
+        pairwise_typetag_crosswts_vuf earlier
+
+        Inputs:
+
+        label1  [string] Label of first antenna. Must be specified (no default)
+
+        label2  [string] Label of second antenna. If specified as None 
+                (default), it will be set equal to label1 in which case the
+                auto-correlation of antenna weights is evaluated
+
+        forceeval 
+                [boolean] When set to False (default) the correlation in
+                the UV plane is not evaluated if it was already evaluated 
+                earlier. If set to True, it will be forcibly evaluated 
+                independent of whether they were already evaluated or not
+        ------------------------------------------------------------------------
+        """
+
+        try:
+            label1
+        except NameError:
+            raise NameError('Input label1 must be specified')
+
+        if label1 not in self.antennas:
+            raise KeyError('Input label1 not found in current instance of class AntennaArray')
+
+        if label2 is None:
+            label2 = label1
+
+        if label2 not in self.antennas:
+            raise KeyError('Input label2 not found in current instance of class AntennaArray')
+
+        if (label1, label2) in self.antenna_pair_to_typetag:
+            typetag_pair = self.antenna_pair_to_typetag[(label1,label2)]
+        elif (label2, label1) in self.antenna_pair_to_typetag:
+            typetag_pair = self.antenna_pair_to_typetag[(label2,label1)]
+        else:
+            raise KeyError('Antenna pair not found in attribute antenna_pair_to_type. Needs debugging')
+
+        typetag1, typetag2 = typetag_pair
+        if forceeval or (typetag_pair not in self.pairwise_typetag_crosswts_vuf):
+            pol = ['P1', 'P2']
+            self.pairwise_typetag_crosswts_vuf[typetag_pair] = {}
+            du = self.gridu[0,1] - self.gridu[0,0]
+            dv = self.gridv[1,0] - self.gridv[0,0]
+            if (typetag1 == typetag2) and (self.antennas[label1].aperture.kernel_type['P1'] == 'func') and (self.antennas[label1].aperture.kernel_type['P2'] == 'func'):
+                gridu, gridv = NP.meshgrid(du*(NP.arange(2*self.gridu.shape[1])-self.gridu.shape[1]), dv*(NP.arange(2*self.gridu.shape[0])-self.gridu.shape[0]))
+                wavelength = FCNST.c / self.f
+                min_lambda = NP.abs(wavelength).min()
+                rmaxNN = 0.5 * NP.sqrt(du**2 + dv**2) * min_lambda 
+                gridx = gridu[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
+                gridy = gridv[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
+                gridxy = NP.hstack((gridx.reshape(-1,1), gridy.reshape(-1,1)))
+                wl = NP.ones(gridu.shape)[:,:,NP.newaxis] * wavelength.reshape(1,1,-1)
+                ant_aprtr = copy.deepcopy(self.antennas[label1].aperture)
+                pol_type = 'dual'
+                kerntype = ant_aprtr.kernel_type
+                shape = ant_aprtr.shape
+                kernshapeparms = {p: {'xmax': ant_aprtr.xmax[p], 'ymax': ant_aprtr.ymax[p], 'rmax': ant_aprtr.rmax[p], 'rmin': ant_aprtr.rmin[p], 'rotangle': ant_aprtr.rotangle[p]} for p in pol}
+                for p in pol:
+                    if shape[p] == 'rect':
+                        shape[p] = 'auto_convolved_rect'
+                    elif shape[p] == 'square':
+                        shape[p] = 'auto_convolved_square'
+                    elif shape[p] == 'circular':
+                        shape[p] = 'auto_convolved_circular'
+                    else:
+                        raise ValueError('Aperture kernel footprint shape - {0} - currently unsupported'.format(shape[p]))
+                        
+                aprtr = APR.Aperture(pol_type=pol_type, kernel_type=kerntype,
+                                     shape=shape, parms=kernshapeparms,
+                                     lkpinfo=None, load_lookup=True)
+                
+                max_aprtr_size = max([NP.sqrt(aprtr.xmax['P1']**2 + NP.sqrt(aprtr.ymax['P1']**2)), NP.sqrt(aprtr.xmax['P2']**2 + NP.sqrt(aprtr.ymax['P2']**2)), aprtr.rmax['P1'], aprtr.rmax['P2']])
+                distNN = 2.0 * max_aprtr_size
+                indNN_list, blind, vuf_gridind = LKP.find_NN(NP.zeros(2).reshape(1,-1), gridxy, distance_ULIM=distNN, flatten=True, parallel=False)
+                dxy = gridxy[vuf_gridind,:]
+                unraveled_vuf_ind = NP.unravel_index(vuf_gridind, gridu.shape+(self.f.size,))
+                unraveled_vu_ind = (unraveled_vuf_ind[0], unraveled_vuf_ind[1])
+                raveled_vu_ind = NP.ravel_multi_index(unraveled_vu_ind, (gridu.shape[0], gridu.shape[1]))
+                for p in pol:
+                    krn = aprtr.compute(dxy, wavelength=wl.ravel()[vuf_gridind], pol=p, rmaxNN=rmaxNN, load_lookup=False)
+                    krn_sparse = SpM.csr_matrix((krn[p], (raveled_vu_ind,)+(unraveled_vuf_ind[2],)), shape=(gridu.size,)+(self.f.size,), dtype=NP.complex64)
+                    krn_sparse_sumuv = krn_sparse.sum(axis=0)
+                    krn_sparse_norm = krn_sparse.A / krn_sparse_sumuv.A
+                    sprow = raveled_vu_ind
+                    spcol = unraveled_vuf_ind[2]
+                    spval = krn_sparse_norm[(sprow,)+(spcol,)]
+                    self.pairwise_typetag_crosswts_vuf[typetag_pair][p] = SpM.csr_matrix((spval, (sprow,)+(spcol,)), shape=(gridu.size,)+(self.f.size,), dtype=NP.complex64)
+            else:
+                ulocs = du*(NP.arange(2*self.gridu.shape[1])-self.gridu.shape[1])
+                vlocs = dv*(NP.arange(2*self.gridu.shape[0])-self.gridu.shape[0])
+                antenna_grid_wts_vuf_1 = self.antennas[label1].evalGridIllumination(uvlocs=(ulocs, vlocs), xy_center=NP.zeros(2))
+                shape_tuple = (vlocs.size, ulocs.size) + (self.f.size,)
+                eps = 1e-10
+                if label1 == label2:
+                    for p in pol:
+                        sum_wts1 = antenna_grid_wts_vuf_1[p].sum(axis=0).A
+                        sum_wts = NP.abs(sum_wts1)**2
+                        antpair_beam = NP.abs(NP.fft.fft2(antenna_grid_wts_vuf_1[p].toarray().reshape(shape_tuple), axes=(0,1)))**2
+                        antpair_grid_wts_vuf = NP.fft.ifft2(antpair_beam/sum_wts[NP.newaxis,:,:], axes=(0,1)) # Inverse FFT
+                        antpair_grid_wts_vuf = NP.fft.ifftshift(antpair_grid_wts_vuf, axes=(0,1))
+                        antpair_grid_wts_vuf[NP.abs(antpair_grid_wts_vuf) < eps] = 0.0
+                        self.pairwise_typetag_crosswts_vuf[typetag_pair][p] = SpM.csr_matrix(antpair_grid_wts_vuf.reshape(-1,self.f.size))
+                else:
+                    antenna_grid_wts_vuf_2 = self.antennas[label2].evalGridIllumination(uvlocs=(ulocs, vlocs), xy_center=NP.zeros(2))
+                    for p in pol:
+                        sum_wts1 = antenna_grid_wts_vuf_1[p].sum(axis=0).A
+                        sum_wts2 = antenna_grid_wts_vuf_2[p].sum(axis=0).A
+                        sum_wts = sum_wts1 * sum_wts2.conj()
+                        antpair_beam = NP.fft.fft2(antenna_grid_wts_vuf_1[p].toarray().reshape(shape_tuple), axes=(0,1)) * NP.fft.fft2(antenna_grid_wts_vuf_1[p].toarray().reshape(shape_tuple).conj(), axes=(0,1))
+                        antpair_grid_wts_vuf = NP.fft.ifft2(antpair_beam/sum_wts[NP.newaxis,:,:], axes=(0,1)) # Inverse FFT
+                        antpair_grid_wts_vuf = NP.fft.ifftshift(antpair_grid_wts_vuf, axes=(0,1))
+                        antpair_grid_wts_vuf[NP.abs(antpair_grid_wts_vuf) < eps] = 0.0
+                        self.pairwise_typetag_crosswts_vuf[typetag_pair][p] = SpM.csr_matrix(antpair_grid_wts_vuf.reshape(-1,self.f.size))
+        else:
+            print 'Specified antenna pair correlation weights have already been evaluated'
+
+    ############################################################################ 
+
+    def evalAntennaAutoCorrWts(self, forceeval=False):
+
+        """
+        ------------------------------------------------------------------------
+        Evaluate auto-correlation of aperture illumination of each antenna on
+        the UVF-plane
+
+        Inputs:
+
+        forceeval [boolean] When set to False (default) the auto-correlation in
+                  the UV plane is not evaluated if it was already evaluated 
+                  earlier. If set to True, it will be forcibly evaluated 
+                  independent of whether they were already evaluated or not
+        ------------------------------------------------------------------------
+        """
+
+        if forceeval or (not self.antenna_autocorr_set):
+            self.antenna_autocorr_set = False
+            for antkey in self.antennas:
+                self.evalAntennaPairCorrWts(antkey, label2=None, forceeval=forceeval)
+            self.antenna_autocorr_set = True
+            
+    ############################################################################ 
+
+    def evalAllAntennaPairCorrWts(self, forceeval=False):
+
+        """
+        ------------------------------------------------------------------------
+        Evaluate zero-centered cross-correlation of aperture illumination of 
+        each antenna pair on the UVF-plane
+
+        Inputs:
+
+        forceeval [boolean] When set to False (default) the zero-centered 
+                  cross-correlation of antenna illumination weights on
+                  the UV plane is not evaluated if it was already evaluated 
+                  earlier. If set to True, it will be forcibly evaluated 
+                  independent of whether they were already evaluated or not
+        ------------------------------------------------------------------------
+        """
+
+        if forceeval or (not self.antenna_crosswts_set):
+            for label_pair in self.antenna_pair_to_typetag:
+                label1, label2 = label_pair
+                self.evalAntennaPairCorrWts(label1, label2=label2, forceeval=forceeval)
+            self.antenna_crosswts_set = True
+            
+    ############################################################################ 
+
+    def makeAutoCorrCube(self, pol=None, data=None, datapool='stack',
+                         tbinsize=None, verbose=True):
+
+        """
+        ------------------------------------------------------------------------
+        Constructs the grid of antenna aperture illumination auto-correlation 
+        using the gridding information determined for every antenna. Flags are 
+        taken into account while constructing this grid
+
+        Inputs:
+
+        pol     [String] The polarization to be gridded. Can be set to 'P1' or 
+                'P2'. If set to None, gridding for all the polarizations is 
+                performed. Default=None
+        
+        data    [dictionary] dictionary containing data that will be used to
+                determine the auto-correlations of antennas. This will be used 
+                only if input datapool is set to 'custom'. It consists of the 
+                following keys and information:
+                'labels'    Contains a numpy array of strings of antenna 
+                            labels
+                'data'      auto-correlated electric fields 
+                            (n_ant x nchan array)
+
+        datapool 
+                [string] Specifies whether data to be used in determining the
+                auto-correlation the E-fields to be used come from
+                'stack' (default), 'current', 'avg' or 'custom'. If set to
+                'custom', the data provided in input data will be used. 
+                Otherwise squared electric fields will be used if set to 
+                'current' or 'stack', and averaged squared electric fields if
+                set to 'avg'
+
+        tbinsize 
+                [scalar or dictionary] Contains bin size of timestamps while
+                averaging. Only used when datapool is set to 'avg' and if the 
+                attribute auto_corr_data does not contain the key 'avg'. In 
+                that case, default = None means all antenna E-field 
+                auto-correlation spectra over all timestamps are averaged. If 
+                scalar, the same (positive) value applies to all polarizations. 
+                If dictionary, timestamp bin size (positive) in seconds is 
+                provided under each key 'P1' and 'P2'. If any of the keys is 
+                missing the auto-correlated antenna E-field spectra for that 
+                polarization are averaged over all timestamps.
+
+        verbose [boolean] If True, prints diagnostic and progress messages. 
+                If False (default), suppress printing such messages.
+
+        Outputs:
+
+        Tuple (autocorr_wts_cube, autocorr_data_cube). autocorr_wts_cube is a
+        dictionary with polarization keys 'P1' and 'P2. Under each key is a 
+        matrix of size nt x nv x nu x nchan. autocorr_data_cube is also a 
+        dictionary with polarization keys 'P1' and 'P2. Under each key is a 
+        matrix of size nt x nv x nu x nchan where nt=1, nt=n_timestamps,
+        or nt=n_tavg if datapool is set to 'current', 'stack' or 'avg'
+        respectively
+        ------------------------------------------------------------------------
+        """
+        
+        if pol is None:
+            pol = ['P1', 'P2']
+
+        pol = NP.unique(NP.asarray(pol))
+        
+        if datapool not in ['stack', 'current', 'avg', 'custom']:
+            raise ValueError('Input datapool must be set to "stack" or "current"')
+
+        if not self.antenna_autocorr_set:
+            self.evalAntennaAutoCorrWts()
+
+        data_info = {}
+        if datapool in ['current', 'stack', 'avg']:
+            if datapool not in self.auto_corr_data:
+                self.evalAutoCorr(datapool=datapool, tbinsize=tbinsize)
+            for apol in pol:
+                data_info[apol] = {'labels': self.auto_corr_data[datapool][apol]['labels'], 'twts': self.auto_corr_data[datapool][apol]['twts'], 'data': self.auto_corr_data[datapool][apol]['E-fields']}
+        else:
+            if not isinstance(data, dict):
+                raise TypeError('Input data must be a dictionary')
+            for apol in pol:
+                if apol not in data:
+                    raise KeyError('Key {)} not found in input data'.format(apol))
+                if not isinstance(data[apol], dict):
+                    raise TypeError('Value under polarization key "{0}" under input data must be a dictionary'.format(apol))
+                if ('labels' not in data[apol]) or ('data' not in data[apol]):
+                    raise KeyError('Keys "labels" and "data" not found under input data[{0}]'.format(apol))
+
+        autocorr_wts_cube = {p: None for p in ['P1', 'P2']}
+        autocorr_data_cube = {p: None for p in ['P1', 'P2']}
+        for apol in pol:
+            if verbose:
+                print 'Gridding auto-correlation of aperture illumination and electric fields for polarization {0} ...'.format(apol)
+
+            if apol not in ['P1', 'P2']:
+                raise ValueError('Invalid specification for input parameter pol')
+
+            for antind, antkey in enumerate(data_info[apol]['labels']):
+                typetag_pair = self.antenna_pair_to_typetag[(antkey,antkey)]
+                shape_tuple = tuple(2*NP.asarray(self.gridu.shape))+(self.f.size,)
+                if autocorr_wts_cube[apol] is None:
+                    autocorr_wts_cube[apol] = self.pairwise_typetag_crosswts_vuf[typetag_pair][apol].toarray().reshape(shape_tuple)[NP.newaxis,:,:,:] * data_info[apol]['twts'][:,antind,:][:,NP.newaxis,NP.newaxis,:] # nt x nv x nu x nchan
+                    autocorr_data_cube[apol] = self.pairwise_typetag_crosswts_vuf[typetag_pair][apol].toarray().reshape(shape_tuple)[NP.newaxis,:,:,:] * data_info[apol]['twts'][:,antind,:][:,NP.newaxis,NP.newaxis,:] * data_info[apol]['data'][:,antind,:][:,NP.newaxis,NP.newaxis,:] # nt x nv x nu x nchan
+                else:
+                    autocorr_wts_cube[apol] += self.pairwise_typetag_crosswts_vuf[typetag_pair][apol].toarray().reshape(shape_tuple)[NP.newaxis,:,:,:] * data_info[apol]['twts'][:,antind,:][:,NP.newaxis,NP.newaxis,:] # nt x nv x nu x nchan
+                    autocorr_data_cube[apol] += self.pairwise_typetag_crosswts_vuf[typetag_pair][apol].toarray().reshape(shape_tuple)[NP.newaxis,:,:,:] * data_info[apol]['twts'][:,antind,:][:,NP.newaxis,NP.newaxis,:] * data_info[apol]['data'][:,antind,:][:,NP.newaxis,NP.newaxis,:] # nt x nv x nu x nchan
+            sum_wts = NP.sum(data_info[apol]['twts'], axis=1) # nt x 1
+            autocorr_wts_cube[apol] = autocorr_wts_cube[apol] / sum_wts[:,NP.newaxis,NP.newaxis,:] # nt x nv x nu x nchan
+            autocorr_data_cube[apol] = autocorr_data_cube[apol] / sum_wts[:,NP.newaxis,NP.newaxis,:] # nt x nv x nu x nchan
+
+        return (autocorr_wts_cube, autocorr_data_cube)
+                    
+    ############################################################################
+
+    def makeCrossCorrWtsCube(self, pol=None, data=None, datapool='stack',
+                             verbose=True):
+
+        """
+        ------------------------------------------------------------------------
+        Constructs the grid of zero-centered cross-correlation of antenna 
+        aperture pairs using the gridding information determined for every 
+        antenna. Flags are taken into account while constructing this grid
+
+        Inputs:
+
+        pol     [String] The polarization to be gridded. Can be set to 'P1' or 
+                'P2'. If set to None, gridding for all the polarizations is 
+                performed. Default=None
+        
+        datapool 
+                [string] Specifies whether flags that come from data to be 
+                used in determining the zero-centered cross-correlation come 
+                from 'stack' (default), 'current', or 'avg'. 
+
+        verbose [boolean] If True, prints diagnostic and progress messages. 
+                If False (default), suppress printing such messages.
+
+        Outputs:
+
+        centered_crosscorr_wts_vuf is a dictionary with polarization keys 
+        'P1' and 'P2. Under each key is a sparse matrix of size 
+        (nv x nu) x nchan. 
+        ------------------------------------------------------------------------
+        """
+        
+        if pol is None:
+            pol = ['P1', 'P2']
+
+        pol = NP.unique(NP.asarray(pol))
+        
+        if datapool not in ['stack', 'current', 'avg', 'custom']:
+            raise ValueError('Input datapool must be set to "stack" or "current"')
+
+        if not self.antenna_crosswts_set:
+            self.evalAllAntennaPairCorrWts()
+
+        centered_crosscorr_wts_cube = {p: None for p in ['P1', 'P2']}
+        for apol in pol:
+            if verbose:
+                print 'Gridding centered cross-correlation of aperture illumination for polarization {0} ...'.format(apol)
+
+            if apol not in ['P1', 'P2']:
+                raise ValueError('Invalid specification for input parameter pol')
+
+            for typetag_pair in self.pairwise_typetags:
+                if 'cross' in self.pairwise_typetags[typetag_pair]:
+                    n_bl = len(self.pairwise_typetags[typetag_pair]['cross'])
+                    if centered_crosscorr_wts_cube[apol] is None:
+                        centered_crosscorr_wts_cube[apol] = n_bl * self.pairwise_typetag_crosswts_vuf[typetag_pair][apol]
+                    else:
+                        centered_crosscorr_wts_cube[apol] += n_bl * self.pairwise_typetag_crosswts_vuf[typetag_pair][apol]
+
+        return centered_crosscorr_wts_cube
+                    
+    ############################################################################
+    
+    def evalAntennaPairPBeam(self, typetag_pair=None, label_pair=None,
+                             pad=0, skypos=None):
+
+        """
+        ------------------------------------------------------------------------
+        Evaluate power pattern response on sky of an antenna pair
+
+        Inputs:
+
+        typetag_pair    
+                    [dictionary] dictionary with two keys '1' and '2' denoting
+                    the antenna typetag. At least one of them must be specified.
+                    If one of them is not specified, it is assumed to be the
+                    same as the other. Only one of the inputs typetag_pair or 
+                    label_pair must be set
+
+        label_pair  [dictionary] dictionary with two keys '1' and '2' denoting 
+                    the antenna label. At least one of them must be specified.
+                    If one of them is not specified, it is assumed to be the
+                    same as the other. Only one of the inputs typetag_pair or 
+                    label_pair must be set
+
+        pad         [integer] indicates the amount of padding before estimating
+                    power pattern. Applicable only when skypos is set to None. 
+                    The output power pattern will be of size 2**pad-1 times the 
+                    size of the UV-grid along l- and m-axes. Value must 
+                    not be negative. Default=0 (implies no padding). pad=1 
+                    implies padding by factor 2 along u- and v-axes
+
+        skypos      [numpy array] Positions on sky at which power pattern is 
+                    to be esimated. It is a 2- or 3-column numpy array in 
+                    direction cosine coordinates. It must be of size nsrc x 2 
+                    or nsrc x 3. If set to None (default), the power pattern is 
+                    estimated over a grid on the sky. If a numpy array is
+                    specified, then power pattern at the given locations is 
+                    estimated.
+
+        Outputs:
+
+        pbinfo is a dictionary with the following keys and values:
+        'pb'    [dictionary] Dictionary with keys 'P1' and 'P2' for 
+                polarization. Under each key is a numpy array of estimated 
+                power patterns. If skypos was set to None, the numpy array is 
+                3D masked array of size nm x nl x nchan. The mask is based on 
+                which parts of the grid are valid direction cosine coordinates 
+                on the sky. If skypos was a numpy array denoting specific sky 
+                locations, the value in this key is a 2D numpy array of size 
+                nsrc x nchan
+        'llocs' [None or numpy array] If the power pattern estimated is a grid
+                (if input skypos was set to None), it contains the l-locations
+                of the grid on the sky. If input skypos was not set to None, 
+                the value under this key is set to None
+        'mlocs' [None or numpy array] If the power pattern estimated is a grid
+                (if input skypos was set to None), it contains the m-locations
+                of the grid on the sky. If input skypos was not set to None, 
+                the value under this key is set to None
+        ------------------------------------------------------------------------
+        """
+
+        if (typetag_pair is None) and (label_pair is None):
+            raise ValueError('One of the inputs typetag_pair or label_pair must be specified')
+        elif (typetag_pair is not None) and (label_pair is not None):
+            raise ValueError('Only one of the inputs typetag_pair or label_pair must be specified')
+
+        if typetag_pair is not None:
+            if ('1' not in typetag_pair) and ('2' not in typetag_pair):
+                raise KeyError('Required keys not found in input typetag_pair')
+            elif ('1' not in typetag_pair) and ('2' in typetag_pair):
+                typetag_pair['1'] = typetag_pair['2']
+            elif ('1' in typetag_pair) and ('2' not in typetag_pair):
+                typetag_pair['2'] = typetag_pair['1']
+            typetag_tuple = (typetag_pair['1'], typetag_pair['2'])
+            if typetag_tuple not in self.pairwise_typetags:
+                if typetag_tuple[::-1] not in self.pairwise_typetags:
+                    raise KeyError('typetag pair not found in antenna cross weights')
+                else:
+                    typetag_tuple = typetag_tuple[::-1]
+            if 'auto' in self.pairwise_typetags[typetag_tuple]:
+                label1, label2 = list(self.pairwise_typetags[typetag_tuple]['auto'])[0]
+            else:
+                label1, label2 = list(self.pairwise_typetags[typetag_tuple]['cross'])[0]
+        else:
+            if ('1' not in label_pair) and ('2' not in label_pair):
+                raise KeyError('Required keys not found in input label_pair')
+            elif ('1' not in label_pair) and ('2' in label_pair):
+                label_pair['1'] = label_pair['2']
+            elif ('1' in label_pair) and ('2' not in label_pair):
+                label_pair['2'] = label_pair['1']
+            label1 = label_pair['1']
+            label2 = label_pair['2']
+            label_tuple = (label1, label2)
+            if label_tuple not in self.antenna_pair_to_typetag:
+                if label_tuple[::-1] not in self.antenna_pair_to_typetag:
+                    raise KeyError('label pair not found in antenna pairs')
+                else:
+                    label_tuple = label_tuple[::-1]
+            label1, label2 = label_tuple
+            typetag_tuple = self.antenna_pair_to_typetag[label_tuple]
+
+        if typetag_tuple not in self.pairwise_typetag_crosswts_vuf:
+            self.evalAntennaPairCorrWts(label1, label2=label2)
+        centered_crosscorr_wts_vuf = self.pairwise_typetag_crosswts_vuf[typetag_tuple]
+
+        du = self.gridu[0,1] - self.gridu[0,0]
+        dv = self.gridv[1,0] - self.gridv[0,0]
+        ulocs = du*(NP.arange(2*self.gridu.shape[1])-self.gridu.shape[1])
+        vlocs = dv*(NP.arange(2*self.gridv.shape[0])-self.gridv.shape[0])        
+        
+        pol = ['P1', 'P2']
+        pbinfo = {'pb': {}}
+        for p in pol:
+            pb = evalApertureResponse(centered_crosscorr_wts_vuf[p], ulocs, vlocs, pad=pad, skypos=skypos)
+            pbinfo['pb'][p] = pb['pb']
+            pbinfo['llocs'] = pb['llocs']
+            pbinfo['mlocs'] = pb['mlocs']
+
+        return pbinfo
 
     ############################################################################ 
 
@@ -11404,6 +12763,13 @@ class AntennaArray:
                                               if set and if 'action' key value 
                                               is set to 'modify'. 
                                               Default = None.
+                                'Ef'          [Optional. Dictionary] Complex 
+                                              Electric field spectra under
+                                              two polarizations which are under
+                                              keys 'P1' and 'P2'. Is used only 
+                                              if set and if 'action' key value 
+                                              is set to 'modify'. 
+                                              Default = None.
                                 'stack'       [boolean] If True (default), 
                                               appends the updated flag and data 
                                               to the end of the stack as a 
@@ -11594,6 +12960,7 @@ class AntennaArray:
                         else:
                             if verbose:
                                 print 'Modifying antenna {0}...'.format(dictitem['label'])
+                            if 'Ef' not in dictitem: dictitem['Et']=None
                             if 'Et' not in dictitem: dictitem['Et']=None
                             if 't' not in dictitem: dictitem['t']=None
                             if 'timestamp' not in dictitem: dictitem['timestamp']=None
