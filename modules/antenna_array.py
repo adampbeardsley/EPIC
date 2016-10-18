@@ -12960,7 +12960,7 @@ class AntennaArray:
                         else:
                             if verbose:
                                 print 'Modifying antenna {0}...'.format(dictitem['label'])
-                            if 'Ef' not in dictitem: dictitem['Et']=None
+                            if 'Ef' not in dictitem: dictitem['Ef']=None
                             if 'Et' not in dictitem: dictitem['Et']=None
                             if 't' not in dictitem: dictitem['t']=None
                             if 'timestamp' not in dictitem: dictitem['timestamp']=None
