@@ -31,11 +31,11 @@ import h5py
 t1 = time.time()
 
 # Make some choices about the analysis
-max_n_timestamps = 40
+max_n_timestamps = 10
 min_timestamp = 0
 bchan = 0  # beginning channel (to cut out edges of the bandpass)
 echan = 108  # ending channel
-max_antenna_radius = 100.0  # meters. To cut outtrigger(s)
+max_antenna_radius = 400.0  # meters. To cut outtrigger(s)
 pols_use = ['P1']
 npol_use = len(pols_use)
 apply_cal = True
@@ -198,9 +198,9 @@ for i in xrange(max_n_timestamps):
     else:
         avg_img = avg_img + NP.mean(imgobj.img['P1'][:, :, bchan:echan].copy(), axis=2)
 
-    avg_img /= max_n_timestamps
-
     master_pb.update(i + 1)
+
+avg_img /= max_n_timestamps
 master_pb.finish()
 
 t2 = time.time()
@@ -208,8 +208,8 @@ t2 = time.time()
 print 'Full loop took ', t2 - t1, 'seconds'
 
 avg_uv = NP.fft.fftshift(NP.fft.fft2(avg_img))
-# avg_uv[253:260, 253:260] = 0
-avg_uv[127:130, 127:130] = 0
+avg_uv[255:258, 255:258] = 0
+# avg_uv[127:130, 127:130] = 0
 avg_img_no_autos = NP.real(NP.fft.ifft2(NP.fft.fftshift(avg_uv)))
 
 nanind = NP.where(imgobj.gridl**2 + imgobj.gridm**2 > 1.0)
