@@ -27,7 +27,7 @@ loops=10
 itr = loops*cal_iter
 damping_factor = 0.35
 Nmeas_eff = cal_iter * (1+damping_factor) / (1-damping_factor)
-sky_version=1
+sky_version=3
 
 grid_map_method='sparse'
 #grid_map_method='regular'
@@ -99,7 +99,7 @@ antpos_info = aar.antenna_positions(sort=True, centering=True)
 #### Set up sky model
 if sky_version == 1:
     n_src = 1
-    lmrad = NP.array([[0.0]])    
+    lmrad = NP.array([[0.0]])
     lmang = NP.array([[0.0]])
     src_flux = NP.array([5.0])
 elif sky_version == 2:
@@ -150,7 +150,7 @@ elif sky_version == 4:
 
 
 skypos = NP.hstack((lmrad * NP.cos(lmang), lmrad * NP.sin(lmang)))
-nvect = NP.sqrt(1.0-NP.sum(skypos**2, axis=1)).reshape(-1,1) 
+nvect = NP.sqrt(1.0-NP.sum(skypos**2, axis=1)).reshape(-1,1)
 skypos = NP.hstack((skypos,nvect))
 
 sky_model = NP.zeros((n_src,nchan,4))
@@ -288,7 +288,7 @@ if rxr_noise==noises[-1] and cal_iter == cal_iters[-1]:
         plot(1000*cal_iters*loops*Nmeas_eff/itr/channel_width,NP.sqrt(variances[line,:,3]),'o',color=colors[line],markeredgecolor='none')
         plot(1000*cal_iters*loops*Nmeas_eff/itr/channel_width,NP.sqrt(variances[line,:,0]),'o',color=colors[line],markeredgecolor='none')
         plot(1000*cal_iters*loops*Nmeas_eff/itr/channel_width,NP.sqrt(variances[line,:,1]),'o',color=colors[line],markeredgecolor='none')
-        
+
     yscale('log')
     xscale('log')
     xlabel('Integration time (ms)')
@@ -296,4 +296,3 @@ if rxr_noise==noises[-1] and cal_iter == cal_iters[-1]:
     ylim([.01,.5])
     xlim([8,500])
     legend(handles=handle_array,loc=0)
-    
