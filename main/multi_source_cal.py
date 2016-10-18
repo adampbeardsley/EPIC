@@ -104,16 +104,21 @@ if mimic_lwa:
 
 
 else:
+
+    src_seed = 50 # fix the seed
+    rstate = NP.random.RandomState(src_seed)
+    NP.random.seed(src_seed)
+
     n_src = 1
-    lmrad = NP.random.uniform(low=0.0,high=0.05,size=n_src).reshape(-1,1)**(0.5)
-    lmrad[-1]=0.00
-    lmang = NP.random.uniform(low=0.0,high=2*NP.pi,size=n_src).reshape(-1,1)
-    #lmrad[0] = 0.0
-    skypos = NP.hstack((lmrad * NP.cos(lmang), lmrad * NP.sin(lmang)))
-    #src_flux = NP.sort((NP.random.uniform(low=0,high=1.0,size=n_src))**(4))
+    #lmrad = rstate.uniform(low=0.0,high=0.2,size=n_src).reshape(-1,1)
+    lmrad = rstate.uniform(low=0.0,high=0.05,size=n_src).reshape(-1,1)**(0.5) # uniform distributed
+    lmrad[-1]=0.15
+    lmang = rstate.uniform(low=0.0,high=2*NP.pi,size=n_src).reshape(-1,1)
+    skypos = NP.hstack((lmrad * NP.cos(lmang), lmrad * NP.sin(lmang))).reshape(-1,2)
+    skypos = NP.hstack((skypos, NP.sqrt(1.0-(skypos[:,0]**2 + skypos[:,1]**2)).reshape(-1,1)))
     src_flux = NP.sort((NP.random.uniform(low=0.3,high=0.7,size=n_src)))
-    #src_flux[-2]=0.8
     src_flux[-1]=1.0
+
 
 tot_flux=NP.sum(src_flux)
 frac_flux=0.0
@@ -121,10 +126,6 @@ ind=0
 while frac_flux < model_frac:
     ind+=1
     frac_flux=NP.sum(src_flux[-ind:])/tot_flux
-
-
-nvect = NP.sqrt(1.0-NP.sum(skypos**2, axis=1)).reshape(-1,1) 
-skypos = NP.hstack((skypos,nvect))
 
 sky_model = NP.zeros((n_src,nchan,4))
 sky_model[:,:,0:3] = skypos.reshape(n_src,1,3)
@@ -139,9 +140,7 @@ ant_pos = ant_info[:,1:] # I'll let the cal class put it in wavelengths.
 auto_noise_model = rxr_noise
 
 for pol in ['P1','P2']:
-    #calarr[pol] = EPICal.cal(ant_pos,freqs,n_iter=cal_iter,sim_mode=True,sky_model=sky_model,gain_factor=0.5,pol=pol,cal_method='multi_source',inv_gains=False)
     calarr[pol] = EPICal.cal(freqs,antpos_info['positions'],pol=pol,sim_mode=True,n_iter=cal_iter,damping_factor=0.35,inv_gains=False,sky_model=sky_model,exclude_autos=True,n_cal_sources=1)
-
 
 # Create array of gains to watch them change
 ncal=itr/cal_iter
@@ -283,6 +282,3 @@ PLT.hist(NP.imag(data[-1,:]-true_g),histtype='step')
 Nmeas_eff = cal_iter / (calarr['P1'].damping_factor)
 visvar = NP.sum(sky_model[:,2,3])**2 / Nmeas_eff
 gvar = 4 * visvar / (NP.sum(abs(true_g.reshape(1,calarr['P1'].n_ant) * calarr['P1'].model_vis[:,:,2])**2,axis=1) - NP.abs(true_g * NP.diag(calarr['P1'].model_vis[:,:,2])))
-
-
-
