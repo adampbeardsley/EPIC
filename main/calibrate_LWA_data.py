@@ -33,6 +33,7 @@ t1 = time.time()
 infile = '/data3/t_nithyanandan/project_MOFF/data/samples/lwa_data.CDF.fits'
 du = DI.DataHandler(indata=infile)
 lat = du.latitude
+lon = 360.0 - 107.63  # hardcoded for LWA1 for now
 f0 = du.center_freq
 nts = du.nchan
 nchan = nts * 2
@@ -126,8 +127,8 @@ if identical_antennas:
 ants = []
 aar = AA.AntennaArray()
 for i in xrange(n_antennas):
-    ant = AA.Antenna('{0:0d}'.format(int(ant_info[i, 0])), lat, ant_info[i, 1:],
-                     f0, nsamples=nts, aperture=ant_aprtrs[i])
+    ant = AA.Antenna('{0:0d}'.format(int(ant_info[i, 0])), '0', lat, lon,
+                     ant_info[i, 1:], f0, nsamples=nts, aperture=ant_aprtrs[i])
     ant.f = ant.f0 + DSP.spectax(2 * nts, dt, shift=True)
     ants += [ant]
     aar = aar + ant
@@ -238,7 +239,7 @@ freq_ave = bchan
 for pol in pols:
     calarr[pol] = EPICal.cal(cal_freqs, antpos_info['positions'], pol=pol,
                              sim_mode=False, n_iter=cal_iter, damping_factor=0.7,
-                             inv_gains=False, sky_model=sky_model, freq_ave=bchan,
+                             inv_gains=False, sky_model=sky_model, freq_ave=freq_ave,
                              exclude_autos=True, phase_fit=False,
                              curr_gains=curr_gains, ref_ant=5, flatten_array=True,
                              n_cal_sources=1)
