@@ -26,6 +26,7 @@ import astropy.time as AT
 import ipdb as PDB
 import pickle
 from scipy import interpolate
+from simple_vis_cal import vis_cal
 
 t1 = time.time()
 
@@ -63,6 +64,7 @@ use_GSM = False
 test_sim = False
 scramble_gains = 0.0  # apply a jitter
 apply_delays = True
+vis_compare = True
 
 # initial_gains_file = '/home/beards/temp/gains3.npy'
 # gains.npy - made from all antennas. I think something went wrong with it.
@@ -265,6 +267,10 @@ master_pb = PGB.ProgressBar(widgets=[PGB.Percentage(),
                             '/{0:0d} time stamps '.format(max_n_timestamps),
                             PGB.ETA()], maxval=max_n_timestamps).start()
 
+if vis_compare:
+    # Adding a visibility matrix to do vis cal for comparison
+    visdata = NP.zeros((ncal + 1, n_antennas, n_antennas, nchan), dtype=NP.complex64) 
+
 for i in xrange(max_n_timestamps):
 
     if test_sim:
@@ -332,6 +338,10 @@ for i in xrange(max_n_timestamps):
             tempdata += (NP.sqrt(add_rxr_noise) / NP.sqrt(2) *
                          (NP.random.normal(loc=0.0, scale=1, size=tempdata.shape) +
                          1j * NP.random.normal(loc=0.0, scale=1, size=tempdata.shape)))
+        if vis_compare:
+            for anti in xrange(n_antennas):
+                visdata[cali, anti, :, :] += (tempdata[anti, :].reshape(1, nchan) *
+                                              NP.conj(tempdata)) / cal_iter
         # Apply calibration and put back into antenna array
         aar.caldata[pol]['E-fields'][0, :, :] = calarr[pol].apply_cal(tempdata)
 
@@ -403,6 +413,33 @@ master_pb.finish()
 t2 = time.time()
 
 print 'Full loop took ', t2 - t1, 'seconds'
+
+# Do visibility based calibration 
+if vis_compare: 
+    # Average in frequency
+    for i in NP.arange(NP.ceil(NP.float(nchan) / freq_ave)):
+        mini = i * freq_ave
+        maxi = NP.min((nchan, (i + 1) * freq_ave))
+        visdata[:, :, :, mini:maxi] = NP.nanmean(visdata[:, :, :, mini:maxi],
+                                                axis=3).reshape(ncal + 1, n_antennas,
+                                                                n_antennas, 1)
+    # Get rid of autos
+    for anti in arange(n_antennas):
+        visdata[:, anti, anti, :] = 0.0
+    # Do the calibration
+    visgains = NP.ones((ncal + 1, n_antennas, nchan), dtype=NP.complex64)
+    for i in NP.arange(ncal):
+        # visgains[i + 1, :, :] = vis_cal(visdata[i + 1, :, :, :], calarr['P1'].model_vis)
+        print i
+        visgains[i + 1, :, :] = vis_cal(visdata[i + 1, :, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
+                                        calarr['P1'].model_vis[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1))
+    # Repeat for entire time interval
+    visdata_full = NP.mean(visdata[1:, :, :, :], axis=0)
+    visgains_full = vis_cal(visdata_full[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
+                            calarr['P1'].model_vis[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1))
+
+    tcal = time.time()
+    print 'Viscal took ', tcal - t2, 'seconds'
 
 # *** Do some plotting
 pre_im = im_stack[1, :, :]
