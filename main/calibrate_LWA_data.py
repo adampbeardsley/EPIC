@@ -65,6 +65,7 @@ test_sim = False
 scramble_gains = 0.0  # apply a jitter
 apply_delays = True
 vis_compare = True
+include_RFI_model = False
 
 # initial_gains_file = '/home/beards/temp/gains3.npy'
 # gains.npy - made from all antennas. I think something went wrong with it.
@@ -217,6 +218,12 @@ else:
     sky_model = NP.zeros((n_src, nchan, 4))
     sky_model[:, :, 0:3] = skypos.reshape(n_src, 1, 3)
     sky_model[:, :, 3] = src_flux.reshape(n_src, 1)
+    if include_RFI_model:
+        # Model the rfi we see at (just beyond) the horizon
+        n_src += 1
+        rfi_model = np.array([0.736, 0.715, 0, 34586.9])
+        rfi_model = np.tile(rfi_model, (nchan, 1)).reshape(1, nchan, 4)
+        sky_model = np.concatenate((sky_model, rfi_model), axis=0)
 
 if test_sim:
     n_src = 2
@@ -243,7 +250,7 @@ for pol in pols:
                              inv_gains=False, sky_model=sky_model, freq_ave=bchan,
                              exclude_autos=True, phase_fit=False,
                              curr_gains=curr_gains, ref_ant=5, flatten_array=True,
-                             n_cal_sources=1)
+                             cal_sources=np.array([0]))
     if scramble_gains > 0:
         for i in NP.arange(NP.ceil(NP.float(nchan) / freq_ave)):
             mini = i * freq_ave
@@ -269,7 +276,7 @@ master_pb = PGB.ProgressBar(widgets=[PGB.Percentage(),
 
 if vis_compare:
     # Adding a visibility matrix to do vis cal for comparison
-    visdata = NP.zeros((ncal + 1, n_antennas, n_antennas, nchan), dtype=NP.complex64) 
+    visdata = NP.zeros((ncal + 1, n_antennas, n_antennas, nchan), dtype=NP.complex64)
 
 for i in xrange(max_n_timestamps):
 
@@ -414,8 +421,8 @@ t2 = time.time()
 
 print 'Full loop took ', t2 - t1, 'seconds'
 
-# Do visibility based calibration 
-if vis_compare: 
+# Do visibility based calibration
+if vis_compare:
     # Average in frequency
     for i in NP.arange(NP.ceil(NP.float(nchan) / freq_ave)):
         mini = i * freq_ave
