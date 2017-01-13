@@ -432,11 +432,13 @@ if vis_compare:
         # visgains[i + 1, :, :] = vis_cal(visdata[i + 1, :, :, :], calarr['P1'].model_vis)
         print i
         visgains[i + 1, :, :] = vis_cal(visdata[i + 1, :, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
-                                        calarr['P1'].model_vis[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1))
+                                        calarr['P1'].model_vis[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
+                                        ref_ant=5)
     # Repeat for entire time interval
     visdata_full = NP.mean(visdata[1:, :, :, :], axis=0)
     visgains_full = vis_cal(visdata_full[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
-                            calarr['P1'].model_vis[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1))
+                            calarr['P1'].model_vis[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
+                            ref_ant=5)
 
     tcal = time.time()
     print 'Viscal took ', tcal - t2, 'seconds'
