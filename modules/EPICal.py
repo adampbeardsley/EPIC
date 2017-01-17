@@ -245,7 +245,7 @@ class cal:
         print 'Updating model visibilities.'
 
         # First find the appropriate pixels to phase to.
-        self.cal_pix_inds = NP.zeros((self.n_cal_sources, 2))
+        self.cal_pix_inds = NP.zeros((self.n_cal_sources, 2), dtype=NP.int)
         self.cal_pix_locs = NP.zeros((self.n_cal_sources, 3))
         for i in NP.arange(self.n_cal_sources):
             xind, yind = NP.unravel_index(NP.argmin((gridl -
