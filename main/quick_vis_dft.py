@@ -4,7 +4,7 @@ import numpy as np
 
 
 def quick_vis_dft(visdata, u, v, gridl, gridm):
-    # Assume visdata is nant x nant, uv is nant x nant x 2, and gridl is same as gridm
+    # Assume visdata, u, and v are nant x nant, uv is nant x nant x 2, and gridl is same as gridm
     image = np.zeros_like(gridl)
     visdata = visdata.reshape(-1)
     u = u.reshape(-1)
