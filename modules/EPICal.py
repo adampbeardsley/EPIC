@@ -392,7 +392,7 @@ class cal:
                                       (self.n_cal_sources, 1, self.n_ant, self.n_chan))), axis=2))
 
                 # Average in frequency
-                for i in NP.arange(NP.ceil(NP.float(self.n_chan) / self.freq_ave)):
+                for i in xrange(NP.int(NP.ceil(NP.float(self.n_chan) / self.freq_ave))):
                     mini = i * self.freq_ave
                     maxi = NP.min((self.n_chan, (i + 1) * self.freq_ave))
                     temp_gains[:, :, mini:maxi] = NP.nanmean(temp_gains[:, :, mini:maxi],
