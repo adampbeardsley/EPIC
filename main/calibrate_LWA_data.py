@@ -428,8 +428,8 @@ if vis_compare:
         mini = i * freq_ave
         maxi = NP.min((nchan, (i + 1) * freq_ave))
         visdata[:, :, :, mini:maxi] = NP.nanmean(visdata[:, :, :, mini:maxi],
-                                                axis=3).reshape(ncal + 1, n_antennas,
-                                                                n_antennas, 1)
+                                                 axis=3).reshape(ncal + 1, n_antennas,
+                                                                 n_antennas, 1)
     # Get rid of autos
     for anti in arange(n_antennas):
         visdata[:, anti, anti, :] = 0.0
