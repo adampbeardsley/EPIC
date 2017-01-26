@@ -10,6 +10,6 @@ def quick_vis_dft(visdata, u, v, gridl, gridm):
     u = u.reshape(-1)
     v = v.reshape(-1)
     for i in arange(visdata.size):
-        image += np.real(visdata[i] * np.exp(2 * np.pi * 1j * (u[i] * gridl + v[i] * gridm)))
+        image += np.real(visdata[i] * np.exp(-2 * np.pi * 1j * (u[i] * gridl + v[i] * gridm)))
 
     return image
