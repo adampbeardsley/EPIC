@@ -221,7 +221,7 @@ else:
     if include_RFI_model:
         # Model the rfi we see at (just beyond) the horizon
         n_src += 1
-        rfi_model = np.array([0.736, 0.715, 0, 34586.9])
+        rfi_model = np.array([0.736, 0.685, 0, 23935.21])
         rfi_model = np.tile(rfi_model, (nchan, 1)).reshape(1, nchan, 4)
         sky_model = np.concatenate((sky_model, rfi_model), axis=0)
 
@@ -513,3 +513,34 @@ ylabel('m')
 cb = colorbar(orientation='horizontal', ticks=[0, 2500, 5000, 7500], pad=.1,
               shrink=.6, label='Jy/beam')
 title('After Calibration')
+
+if vis_compare:
+    vis_data = visgains[0:-1, :, bchan + 1]
+    # Phase and amplitude
+    f_vis_phases = PLT.figure("Vis based Phases")
+    f_vis_amps = PLT.figure("Vis based Amplitudes")
+    for i in xrange(n_antennas):
+        PLT.figure(f_vis_phases.number)
+        plot(NP.unwrap(NP.angle(vis_data[:, i] * NP.conj(true_g[i]))))
+        PLT.figure(f_vis_amps.number)
+        plot(NP.abs(vis_data[:, i] / true_g[i]))
+    PLT.figure(f_vis_phases.number)
+    xlabel('Calibration iteration')
+    ylabel('Calibration phase (rad)')
+    PLT.figure(f_vis_amps.number)
+    xlabel('Calibration iteration')
+    ylabel('Calibration amplitude')
+
+    # Make plot showing correlation between "final" solutions
+    vis_final = NP.mean(vis_data[15:, :], axis=0)
+    epical_final = NP.mean(data[15:, :], axis=0)
+    f_corr_phases = PLT.figure("Phases compared")
+    clf()
+    plot(NP.angle(epical_final), NP.angle(vis_final), 'o')
+    xlabel('EPICal phase solution')
+    ylabel('Vis based phase solution')
+    f_corr_amps = PLT.figure("Amplitudes compared")
+    clf()
+    plot(NP.abs(epical_final), NP.abs(vis_final), 'o')
+    xlabel('EPICal amplitude solution')
+    ylabel('Vis based amplitude solution')
