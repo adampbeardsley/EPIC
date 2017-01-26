@@ -2,7 +2,7 @@
 import numpy as NP
 
 
-def vis_cal(visdata, vismodel, max_iter=2000, threshold=0.000001,
+def vis_cal(visdata, vismodel, max_iter=200, threshold=0.001,
             damping_factor=0.05, ref_ant=0, inv_gains=False, uv=None, min_u=None):
 
     nchan = visdata.shape[-1]
