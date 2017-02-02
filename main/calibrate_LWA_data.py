@@ -220,10 +220,16 @@ else:
     sky_model[:, :, 3] = src_flux.reshape(n_src, 1)
     if include_RFI_model:
         # Model the rfi we see at (just beyond) the horizon
-        n_src += 1
-        rfi_model = np.array([0.736, 0.685, 0, 23935.21])
-        rfi_model = np.tile(rfi_model, (nchan, 1)).reshape(1, nchan, 4)
-        sky_model = np.concatenate((sky_model, rfi_model), axis=0)
+        n_src += 3
+        rfi_model1 = np.array([0.72525284, 0.69235203, 0.0, 16650.18])
+        rfi_model2 = np.array([0.74016684, 0.67419503, 0.0, 16650.18])
+        rfi_model3 = np.array([0.76934685,  0.64307003, 0.0, 9990.11])
+        rfi_model1 = np.tile(rfi_model1, (nchan, 1)).reshape(1, nchan, 4)
+        rfi_model2 = np.tile(rfi_model2, (nchan, 1)).reshape(1, nchan, 4)
+        rfi_model3 = np.tile(rfi_model3, (nchan, 1)).reshape(1, nchan, 4)
+        sky_model = np.concatenate((sky_model, rfi_model1), axis=0)
+        sky_model = np.concatenate((sky_model, rfi_model2), axis=0)
+        sky_model = np.concatenate((sky_model, rfi_model3), axis=0)
 
 if test_sim:
     n_src = 2
@@ -440,12 +446,12 @@ if vis_compare:
         print('{}/{}'.format(i, ncal))
         visgains[i + 1, :, :] = vis_cal(visdata[i + 1, :, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
                                         calarr['P1'].model_vis[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
-                                        ref_ant=5)
+                                        ref_ant=5, uv=uv, min_u=10)
     # Repeat for entire time interval
     visdata_full = NP.mean(visdata[1:, :, :, :], axis=0)
     visgains_full = vis_cal(visdata_full[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
                             calarr['P1'].model_vis[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
-                            ref_ant=5)
+                            ref_ant=5, uv=uv, min_u=10)
 
     tcal = time.time()
     print 'Viscal took ', tcal - t2, 'seconds'
