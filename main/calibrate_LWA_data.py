@@ -442,6 +442,8 @@ if vis_compare:
     # Do the calibration
     visgains = NP.ones((ncal + 1, n_antennas, nchan), dtype=NP.complex64)
     print('Calibrating sub integrations.')
+    uv = (calarr['P1'].ant_pos[:, 512, :].reshape(-1, 1, 3) -
+          calarr['P1'].ant_pos[:, 512, :].reshape(1, -1, 3))
     for i in NP.arange(ncal):
         print('{}/{}'.format(i, ncal))
         visgains[i + 1, :, :] = vis_cal(visdata[i + 1, :, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
