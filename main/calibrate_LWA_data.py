@@ -93,6 +93,13 @@ if ant_flag is not None:
     antid = NP.delete(antid, ant_flag)
     antpos = NP.delete(antpos, ant_flag, axis=0)
     ant_data = NP.delete(ant_data, ant_flag, axis=1)
+
+# temporarily try removing a couple more
+ant_flag2 = NP.array([33, 165])
+antid = NP.delete(antid, ant_flag2)
+antpos = NP.delete(antpos, ant_flag2, axis=0)
+ant_data = NP.delete(ant_data, ant_flag2, axis=1)
+
 ant_info = NP.hstack((antid.reshape(-1, 1), antpos))
 n_antennas = ant_info.shape[0]
 
