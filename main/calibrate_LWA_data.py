@@ -441,6 +441,7 @@ if vis_compare:
         visdata[:, anti, anti, :] = 0.0
     # Do the calibration
     visgains = NP.ones((ncal + 1, n_antennas, nchan), dtype=NP.complex64)
+    visgains_damped = 0.25 * visgains.copy()
     print('Calibrating sub integrations.')
     uv = (calarr['P1'].ant_pos[:, 512, :].reshape(-1, 1, 3) -
           calarr['P1'].ant_pos[:, 512, :].reshape(1, -1, 3))
@@ -449,6 +450,8 @@ if vis_compare:
         visgains[i + 1, :, :] = vis_cal(visdata[i + 1, :, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
                                         calarr['P1'].model_vis[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
                                         ref_ant=5, uv=uv, min_u=10)
+        visgains_damped[i + 1, :, :] = (calarr['P1'].damping_factor * visgains_damped[i, :, :] +
+                                        (1 - calarr['P1'].damping_factor) * visgains[i + 1, :, :])
     # Repeat for entire time interval
     visdata_full = NP.mean(visdata[1:, :, :, :], axis=0)
     visgains_full = vis_cal(visdata_full[:, :, nchan / 2].reshape(n_antennas, n_antennas, 1),
@@ -552,3 +555,41 @@ if vis_compare:
     plot(NP.abs(epical_final), NP.abs(vis_final), 'o')
     xlabel('EPICal amplitude solution')
     ylabel('Vis based amplitude solution')
+
+    # Get some statistics out
+    gain_mat_epical = epical_final.reshape(-1, 1) * np.conj(epical_final.reshape(1, -1))
+    gain_mat_vis = vis_final.reshape(-1, 1) * np.conj(vis_final.reshape(1, -1))
+    uncal_image = quick_vis_dft(visdata_full[:, :, 512], uv[:, :, 0], uv[:, :, 1], imgobj.gridl, imgobj.gridm)
+    cal_image_epical = quick_vis_dft(visdata_full[:, :, 512] / gain_mat_epical, uv[:, :, 0],
+                                     uv[:, :, 1], imgobj.gridl, imgobj.gridm)
+    cal_image_vis = quick_vis_dft(visdata_full[:, :, 512] / gain_mat_vis, uv[:, :, 0],
+                                  uv[:, :, 1], imgobj.gridl, imgobj.gridm)
+    sim_image = quick_vis_dft(calarr['P1'].model_vis[:, :, 512], uv[:, :, 0],
+                              uv[:, :, 1], imgobj.gridl, imgobj.gridm)
+
+    print('\nAmplitude ranges\n==============')
+    print('Epicaled:        ' + str(NP.min(NP.abs(data[15:, :]))) + ', ' +
+          str(NP.max(NP.abs(data[15:, :]))))
+    print('Viscaled:        ' + str(NP.min(NP.abs(vis_data[15:, :]))) + ', ' +
+          str(NP.max(NP.abs(vis_data[15:, :]))))
+    print('Viscaled, damped ' + str(NP.min(NP.abs(visgains_damped[15:-1, :, bchan + 1]))) + ', ' +
+          str(NP.max(NP.abs(visgains_damped[15:-1, :, bchan + 1]))))
+
+    ind = NP.where(NP.sqrt(imgobj.gridl**2 + imgobj.gridm**2) < 1.0)
+    drange_uncal = NP.nanmax(uncal_image[ind]) / NP.nanmedian(NP.abs(uncal_image[ind] - NP.nanmedian(uncal_image[ind])))
+    drange_epical = NP.nanmax(cal_image_epical[ind]) / NP.nanmedian(NP.abs(cal_image_epical[ind] - NP.nanmedian(cal_image_epical[ind])))
+    drange_viscal = NP.nanmax(cal_image_vis[ind]) / NP.nanmedian(NP.abs(cal_image_vis[ind] - NP.nanmedian(cal_image_vis[ind])))
+
+    print('\nDynamic ranges\n==============')
+    print('Uncalibrated: ' + str(drange_uncal))
+    print('Epicaled:     ' + str(drange_epical))
+    print('Viscaled:     ' + str(drange_viscal))
+
+    noise_epical = np.std(data[15:, :] / epical_final.reshape(1, -1))
+    noise_vis = np.std(vis_data[15:, :] / vis_final.reshape(1, -1))
+    noise_vis_damped = np.std(visgains_damped[15:-1, :, bchan + 1] / vis_final.reshape(1, -1))
+
+    print('\nNoise levels\n==============')
+    print('Epicaled:        ' + str(noise_epical))
+    print('Viscaled:        ' + str(noise_vis))
+    print('Viscaled, damped ' + str(noise_vis_damped))
