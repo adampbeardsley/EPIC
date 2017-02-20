@@ -26,6 +26,7 @@ import astropy.time as AT
 import ipdb as PDB
 import pickle
 from scipy import interpolate
+from scipy.stats.stats import pearsonr
 from simple_vis_cal import vis_cal
 
 t1 = time.time()
@@ -96,6 +97,7 @@ if ant_flag is not None:
 
 # temporarily try removing a couple more
 ant_flag2 = NP.array([33, 165])
+ant_flag2 = NP.concatenate((ant_flag2, [130, 169]))
 antid = NP.delete(antid, ant_flag2)
 antpos = NP.delete(antpos, ant_flag2, axis=0)
 ant_data = NP.delete(ant_data, ant_flag2, axis=1)
@@ -600,3 +602,6 @@ if vis_compare:
     print('Epicaled:        ' + str(noise_epical))
     print('Viscaled:        ' + str(noise_vis))
     print('Viscaled, damped ' + str(noise_vis_damped))
+
+    print('\nPearson correlation coefficient between EPICal and vis gains = ')
+    print(str(pearsonr(epical_final, vis_final)))
