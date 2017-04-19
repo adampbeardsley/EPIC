@@ -12,6 +12,7 @@ import EPICal
 import aperture as APR
 import time
 import pickle
+from scipy import signal
 
 t1 = time.time()
 
@@ -400,3 +401,39 @@ bg_snr = signal_map[ind] / noise_map[ind]
 f_snr_hist = PLT.figure("Background Histogram")
 clf()
 PLT.hist(bg_snr, bins=100)
+
+# Create image of footprint
+overres = 10.0
+wavelength = FCNST.c / f0
+grid_img = NP.zeros((int(overres) * imgobj.gridu.shape[0], int(overres) * imgobj.gridv.shape[1]))
+du = imgobj.gridu[0, 1] - imgobj.gridu[0, 0]
+dv = imgobj.gridv[1, 0] - imgobj.gridv[0, 0]
+u_overres = NP.arange(-0.5 * du + imgobj.gridu.min(), 0.5 * du + imgobj.gridu.max(), du / overres)
+v_overres = NP.arange(-0.5 * dv + imgobj.gridv.min(), 0.5 * dv + imgobj.gridv.max(), dv / overres)
+ant_pos[:, 0] -= (ant_pos[:, 0].max() + ant_pos[:, 0].min()) / 2.0
+ant_pos[:, 1] -= (ant_pos[:, 1].max() + ant_pos[:, 1].min()) / 2.0
+for anti in NP.arange(ant_pos.shape[0]):
+    ui = NP.argmin(NP.abs(ant_pos[anti, 0] / wavelength - u_overres))
+    vi = NP.argmin(NP.abs(ant_pos[anti, 1] / wavelength - v_overres))
+    grid_img[ui, vi] = 1.0
+kern = NP.ones((int(overres * ant_sizex / wavelength / du),
+                int(overres * ant_sizey / wavelength / dv)))
+grid_img = signal.convolve2d(grid_img, kern, mode='same')
+
+# Plotting bit
+f_grid = PLT.figure("Grid")
+clf()
+range_x = [0, 20]
+range_y = [0, 20]
+imshow(grid_img.transpose(), aspect='equal', origin='lower', interpolation='none',
+       extent=(u_overres.min(), u_overres.max(), v_overres.min(), v_overres.max()),
+       cmap=plt.get_cmap('Blues'))
+clim([0, 2])  # Make the color of the boxes a bit lighter
+for i in NP.arange(imgobj.gridu.shape[1]):
+    plot([imgobj.gridu[0, i], imgobj.gridu[0, i]], range_y, color='black')
+for i in NP.arange(imgobj.gridv.shape[0]):
+    plot(range_x, [imgobj.gridv[i, 0], imgobj.gridv[i, 0]], color='black')
+xlim(range_x)
+ylim(range_y)
+xlabel('East (wavelengths)')
+ylabel('North (wavelengths)')
