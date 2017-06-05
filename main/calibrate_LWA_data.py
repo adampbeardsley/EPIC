@@ -230,15 +230,15 @@ else:
     if include_RFI_model:
         # Model the rfi we see at (just beyond) the horizon
         n_src += 3
-        rfi_model1 = np.array([0.72525284, 0.69235203, 0.0, 16650.18])
-        rfi_model2 = np.array([0.74016684, 0.67419503, 0.0, 16650.18])
-        rfi_model3 = np.array([0.76934685,  0.64307003, 0.0, 9990.11])
-        rfi_model1 = np.tile(rfi_model1, (nchan, 1)).reshape(1, nchan, 4)
-        rfi_model2 = np.tile(rfi_model2, (nchan, 1)).reshape(1, nchan, 4)
-        rfi_model3 = np.tile(rfi_model3, (nchan, 1)).reshape(1, nchan, 4)
-        sky_model = np.concatenate((sky_model, rfi_model1), axis=0)
-        sky_model = np.concatenate((sky_model, rfi_model2), axis=0)
-        sky_model = np.concatenate((sky_model, rfi_model3), axis=0)
+        rfi_model1 = NP.array([0.72525284, 0.69235203, 0.0, 16650.18])
+        rfi_model2 = NP.array([0.74016684, 0.67419503, 0.0, 16650.18])
+        rfi_model3 = NP.array([0.76934685, 0.64307003, 0.0, 9990.11])
+        rfi_model1 = NP.tile(rfi_model1, (nchan, 1)).reshape(1, nchan, 4)
+        rfi_model2 = NP.tile(rfi_model2, (nchan, 1)).reshape(1, nchan, 4)
+        rfi_model3 = NP.tile(rfi_model3, (nchan, 1)).reshape(1, nchan, 4)
+        sky_model = NP.concatenate((sky_model, rfi_model1), axis=0)
+        sky_model = NP.concatenate((sky_model, rfi_model2), axis=0)
+        sky_model = NP.concatenate((sky_model, rfi_model3), axis=0)
 
 if test_sim:
     n_src = 2
@@ -265,7 +265,7 @@ for pol in pols:
                              inv_gains=False, sky_model=sky_model, freq_ave=bchan,
                              exclude_autos=True, phase_fit=False,
                              curr_gains=curr_gains, ref_ant=5, flatten_array=True,
-                             cal_sources=np.array([0]))
+                             cal_sources=NP.array([0]))
     if scramble_gains > 0:
         for i in NP.arange(NP.ceil(NP.float(nchan) / freq_ave)):
             mini = i * freq_ave
@@ -566,8 +566,8 @@ if vis_compare:
     ylabel('Vis based amplitude solution')
 
     # Get some statistics out
-    gain_mat_epical = epical_final.reshape(-1, 1) * np.conj(epical_final.reshape(1, -1))
-    gain_mat_vis = vis_final.reshape(-1, 1) * np.conj(vis_final.reshape(1, -1))
+    gain_mat_epical = epical_final.reshape(-1, 1) * NP.conj(epical_final.reshape(1, -1))
+    gain_mat_vis = vis_final.reshape(-1, 1) * NP.conj(vis_final.reshape(1, -1))
     uncal_image = quick_vis_dft(visdata_full[:, :, 512], uv[:, :, 0], uv[:, :, 1], imgobj.gridl, imgobj.gridm)
     cal_image_epical = quick_vis_dft(visdata_full[:, :, 512] / gain_mat_epical, uv[:, :, 0],
                                      uv[:, :, 1], imgobj.gridl, imgobj.gridm)
@@ -594,9 +594,9 @@ if vis_compare:
     print('Epicaled:     ' + str(drange_epical))
     print('Viscaled:     ' + str(drange_viscal))
 
-    noise_epical = np.std(data[15:, :] / epical_final.reshape(1, -1))
-    noise_vis = np.std(vis_data[15:, :] / vis_final.reshape(1, -1))
-    noise_vis_damped = np.std(visgains_damped[15:-1, :, bchan + 1] / vis_final.reshape(1, -1))
+    noise_epical = NP.std(data[15:, :] / epical_final.reshape(1, -1))
+    noise_vis = NP.std(vis_data[15:, :] / vis_final.reshape(1, -1))
+    noise_vis_damped = NP.std(visgains_damped[15:-1, :, bchan + 1] / vis_final.reshape(1, -1))
 
     print('\nNoise levels\n==============')
     print('Epicaled:        ' + str(noise_epical))
