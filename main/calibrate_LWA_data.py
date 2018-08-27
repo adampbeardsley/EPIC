@@ -118,7 +118,7 @@ identical_antennas = True
 ant_sizex = 3.0  # meters
 ant_sizey = 3.0
 ant_diameter = NP.sqrt(ant_sizex**2 + ant_sizey**2)
-ant_kernshape = {pol: 'rect' for pol in ['P1', 'P2']}
+ant_kernshape = {pol: 'circular' for pol in ['P1', 'P2']}
 ant_pol_type = 'dual'
 ant_kerntype = {pol: 'func' for pol in ['P1', 'P2']}
 ant_lookupinfo = None
@@ -144,7 +144,7 @@ for i in xrange(n_antennas):
     ants += [ant]
     aar = aar + ant
 
-aar.grid(uvspacing=0.25, xypad=2 * NP.max([ant_sizex, ant_sizey]))
+aar.grid(uvspacing=0.5, xypad=2 * NP.max([ant_sizex, ant_sizey]))
 antpos_info = aar.antenna_positions(sort=True, centering=True)
 
 # Select time steps
@@ -409,8 +409,8 @@ for i in xrange(max_n_timestamps):
         temp_amp += NP.abs(tempdata[0, :])**2
         if i % cal_iter == 0:
             uv = NP.fft.fftshift(NP.fft.fft2(temp_im)) / cal_iter
-            uv[126:131, 125:132] = 0
-            uv[125:132, 126:131] = 0
+            uv[63:66, 62:67] = 0
+            uv[62:67, 63:66] = 0
 
             im_stack[cali, :, :] = NP.real(NP.fft.ifft2(NP.fft.fftshift(uv)))
 
